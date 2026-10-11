@@ -1,0 +1,522 @@
+/* ============================================================
+   TRIAD ACADEMIA — style.css
+   CSS compartilhado: variáveis, tema, componentes base.
+============================================================ */
+
+/* ============================================================
+   RESET
+============================================================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body { min-height: 100vh; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.4s ease, color 0.4s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   TEMAS
+============================================================ */
+:root,
+[data-theme="light"] {
+  --bg: #f7faf8;
+  --bg-soft: #eef7f1;
+  --bg-sidebar: #ffffff;
+  --card: #ffffff;
+  --card-2: #f4f9f5;
+  --border: #eaf1ec;
+  --border-2: #dfe9e2;
+  --text: #0f2417;
+  --text-2: #2b4436;
+  --muted: #7a9184;
+  --muted-2: #a8bfb2;
+  --primary: #00b85c;
+  --primary-2: #00e676;
+  --primary-deep: #008f47;
+  --primary-soft: #e6f9ee;
+  --primary-soft-2: #d1f4e0;
+
+  --c-green-bg: #e6f9ee;   --c-green-fg: #00a352;
+  --c-blue-bg:  #e8f1ff;   --c-blue-fg:  #2563eb;
+  --c-purple-bg:#f1ebff;   --c-purple-fg:#7c3aed;
+  --c-pink-bg:  #ffe9f0;   --c-pink-fg:  #db2777;
+  --c-orange-bg:#fff1e3;   --c-orange-fg:#ea580c;
+  --c-yellow-bg:#fff8e1;   --c-yellow-fg:#ca8a04;
+  --c-red-bg:   #ffe8e8;   --c-red-fg:   #dc2626;
+
+  --shadow-xs: 0 1px 2px rgba(15, 36, 23, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 36, 23, 0.05), 0 1px 2px rgba(15, 36, 23, 0.03);
+  --shadow-md: 0 4px 16px rgba(15, 36, 23, 0.06);
+  --shadow-lg: 0 12px 40px rgba(15, 36, 23, 0.08);
+  --shadow-primary: 0 8px 24px rgba(0, 184, 92, 0.25);
+
+  /* Liquid Glass */
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-strong: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.9);
+  --glow: rgba(0, 230, 118, 0.5);
+}
+
+[data-theme="dark"] {
+  --bg: #071410;
+  --bg-soft: #0b1f17;
+  --bg-sidebar: #0a1a12;
+  --card: #0e2419;
+  --card-2: #122e21;
+  --border: #1a3d29;
+  --border-2: #234c34;
+  --text: #e8f7ee;
+  --text-2: #b8d9c5;
+  --muted: #7a9a86;
+  --muted-2: #4f7060;
+  --primary: #00e676;
+  --primary-2: #4dffb0;
+  --primary-deep: #00b85c;
+  --primary-soft: #0d3320;
+  --primary-soft-2: #114028;
+
+  --c-green-bg:  #0d3320;  --c-green-fg:  #4dffb0;
+  --c-blue-bg:   #0d213a;  --c-blue-fg:   #60a5fa;
+  --c-purple-bg: #1e1238;  --c-purple-fg: #a78bfa;
+  --c-pink-bg:   #3a0d21;  --c-pink-fg:   #f472b6;
+  --c-orange-bg: #3a250d;  --c-orange-fg: #fbbf24;
+  --c-yellow-bg: #3a340d;  --c-yellow-fg: #facc15;
+  --c-red-bg:    #3a0d0d;  --c-red-fg:    #f87171;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --shadow-primary: 0 8px 24px rgba(0, 230, 118, 0.3);
+
+  --glass: rgba(20, 45, 32, 0.45);
+  --glass-strong: rgba(20, 45, 32, 0.78);
+  --glass-border: rgba(0, 230, 118, 0.18);
+  --glow: rgba(0, 255, 136, 0.6);
+}
+
+/* ============================================================
+   BOTÕES
+============================================================ */
+.btn {
+  padding: 13px 22px;
+  border-radius: 13px;
+  border: none;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.15s;
+  letter-spacing: -0.2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+  color: #fff;
+  box-shadow: var(--shadow-primary);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px rgba(0, 184, 92, 0.35);
+}
+
+.btn-primary:active { transform: translateY(0); }
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-ghost {
+  background: var(--card-2);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  background: var(--card);
+  border-color: var(--border-2);
+  color: var(--text);
+}
+
+.btn-danger {
+  background: var(--c-red-bg);
+  color: var(--c-red-fg);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.btn-danger:hover {
+  background: var(--c-red-fg);
+  color: #fff;
+}
+
+.btn-warning {
+  background: var(--c-orange-bg);
+  color: var(--c-orange-fg);
+  border: 1px solid rgba(234, 88, 12, 0.2);
+}
+
+.btn-warning:hover {
+  background: var(--c-orange-fg);
+  color: #fff;
+}
+
+.btn-sm { padding: 8px 14px; font-size: 12.5px; }
+
+/* ============================================================
+   CARDS
+============================================================ */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.card-title-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.card-link {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: 0.15s;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.card-link:hover { color: var(--primary-deep); }
+
+/* Ícones pastel */
+.ic-green  { background: var(--c-green-bg);  color: var(--c-green-fg); }
+.ic-blue   { background: var(--c-blue-bg);   color: var(--c-blue-fg); }
+.ic-purple { background: var(--c-purple-bg); color: var(--c-purple-fg); }
+.ic-pink   { background: var(--c-pink-bg);   color: var(--c-pink-fg); }
+.ic-orange { background: var(--c-orange-bg); color: var(--c-orange-fg); }
+.ic-yellow { background: var(--c-yellow-bg); color: var(--c-yellow-fg); }
+.ic-red    { background: var(--c-red-bg);    color: var(--c-red-fg); }
+
+/* ============================================================
+   INPUTS
+============================================================ */
+.field { margin-bottom: 14px; }
+
+.field label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 13px 15px;
+  background: var(--card-2);
+  border: 1.5px solid var(--border);
+  border-radius: 13px;
+  color: var(--text);
+  font-size: 14.5px;
+  font-family: inherit;
+  font-weight: 500;
+  outline: none;
+  transition: 0.15s;
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--primary);
+  background: var(--card);
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: var(--muted-2);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ============================================================
+   TOAST
+============================================================ */
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 14px;
+  padding: 13px 22px;
+  font-size: 13.5px;
+  font-weight: 700;
+  z-index: 1100;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-lg);
+  max-width: 90vw;
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.success { background: var(--primary-deep); color: #fff; }
+.toast.error { background: var(--c-red-fg); color: #fff; }
+.toast.warning { background: var(--c-orange-fg); color: #fff; }
+
+/* ============================================================
+   MODAL
+============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 36, 23, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay.show { display: flex; }
+
+.modal {
+  background: var(--card);
+  border-radius: 22px;
+  padding: 26px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: modalIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  border: 1px solid var(--border);
+}
+
+.modal.wide { max-width: 600px; }
+
+.modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.15s;
+}
+
+.modal-close:hover {
+  background: var(--c-red-bg);
+  color: var(--c-red-fg);
+  border-color: transparent;
+}
+
+.modal h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.4px;
+  margin-bottom: 6px;
+}
+
+.modal .modal-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 20px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.modal-actions .btn { flex: 1; }
+
+/* ============================================================
+   SKELETON
+============================================================ */
+.skeleton {
+  background: linear-gradient(90deg, var(--card-2) 25%, var(--border) 50%, var(--card-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 8px;
+  height: 14px;
+  margin: 6px 0;
+}
+
+/* ============================================================
+   EMPTY
+============================================================ */
+.empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.empty .emoji {
+  font-size: 44px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
+
+/* ============================================================
+   ANIMAÇÕES
+============================================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes wave {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(14deg); }
+  20% { transform: rotate(-8deg); }
+}
+
+/* ============================================================
+   AVATAR / PERFIL
+============================================================ */
+.avatar-gradient {
+  background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  box-shadow: var(--shadow-primary);
+}
+
+.wave-emoji {
+  display: inline-block;
+  animation: wave 2.5s ease-in-out infinite;
+  transform-origin: 70% 70%;
+}
+
+/* ============================================================
+   BADGES / TAGS
+============================================================ */
+.badge {
+  padding: 5px 11px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.badge-ativo    { background: var(--c-green-bg);  color: var(--c-green-fg); }
+.badge-pendente { background: var(--c-orange-bg); color: var(--c-orange-fg); }
+.badge-inativo  { background: var(--card-2);      color: var(--muted); }
+.badge-info     { background: var(--c-blue-bg);   color: var(--c-blue-fg); }
+
+/* ============================================================
+   UTILITÁRIOS
+============================================================ */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.text-center { text-align: center; }
+.hidden { display: none !important; }

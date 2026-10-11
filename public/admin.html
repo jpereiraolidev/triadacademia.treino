@@ -1,0 +1,2402 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Triad Academia | Painel Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    /* ============================================================
+       RESET / VARIÁVEIS
+    ============================================================ */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root,
+    [data-theme="light"] {
+      --bg: #f7faf8;
+      --bg-sidebar: #ffffff;
+      --card: #ffffff;
+      --card-2: #f4f9f5;
+      --border: #eaf1ec;
+      --border-2: #dfe9e2;
+      --text: #0f2417;
+      --text-2: #2b4436;
+      --muted: #7a9184;
+      --muted-2: #a8bfb2;
+      --primary: #00b85c;
+      --primary-2: #00e676;
+      --primary-deep: #008f47;
+      --primary-soft: #e6f9ee;
+      --primary-soft-2: #d1f4e0;
+
+      --c-green-bg: #e6f9ee;   --c-green-fg: #00a352;
+      --c-blue-bg:  #e8f1ff;   --c-blue-fg:  #2563eb;
+      --c-purple-bg:#f1ebff;   --c-purple-fg:#7c3aed;
+      --c-pink-bg:  #ffe9f0;   --c-pink-fg:  #db2777;
+      --c-orange-bg:#fff1e3;   --c-orange-fg:#ea580c;
+      --c-yellow-bg:#fff8e1;   --c-yellow-fg:#ca8a04;
+      --c-red-bg:   #ffe8e8;   --c-red-fg:   #dc2626;
+
+      --shadow-xs: 0 1px 2px rgba(15, 36, 23, 0.04);
+      --shadow-sm: 0 1px 3px rgba(15, 36, 23, 0.05), 0 1px 2px rgba(15, 36, 23, 0.03);
+      --shadow-md: 0 4px 16px rgba(15, 36, 23, 0.06);
+      --shadow-lg: 0 12px 40px rgba(15, 36, 23, 0.08);
+      --shadow-primary: 0 8px 24px rgba(0, 184, 92, 0.25);
+    }
+
+    [data-theme="dark"] {
+      --bg: #071410;
+      --bg-sidebar: #0a1a12;
+      --card: #0e2419;
+      --card-2: #122e21;
+      --border: #1a3d29;
+      --border-2: #234c34;
+      --text: #e8f7ee;
+      --text-2: #b8d9c5;
+      --muted: #7a9a86;
+      --muted-2: #4f7060;
+      --primary: #00e676;
+      --primary-2: #4dffb0;
+      --primary-deep: #00b85c;
+      --primary-soft: #0d3320;
+      --primary-soft-2: #114028;
+
+      --c-green-bg:  #0d3320;  --c-green-fg:  #4dffb0;
+      --c-blue-bg:   #0d213a;  --c-blue-fg:   #60a5fa;
+      --c-purple-bg: #1e1238;  --c-purple-fg: #a78bfa;
+      --c-pink-bg:   #3a0d21;  --c-pink-fg:   #f472b6;
+      --c-orange-bg: #3a250d;  --c-orange-fg: #fbbf24;
+      --c-yellow-bg: #3a340d;  --c-yellow-fg: #facc15;
+      --c-red-bg:    #3a0d0d;  --c-red-fg:    #f87171;
+
+      --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+      --shadow-primary: 0 8px 24px rgba(0, 230, 118, 0.3);
+    }
+
+    html, body { min-height: 100vh; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.4s ease, color 0.4s ease;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ============================================================
+       LAYOUT
+    ============================================================ */
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ============================================================
+       SIDEBAR
+    ============================================================ */
+    .sidebar {
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 10px 28px;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-primary);
+      flex-shrink: 0;
+    }
+
+    .brand-logo svg { width: 22px; height: 22px; }
+
+    .brand-text h1 {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .brand-text p {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 1px;
+    }
+
+    .nav-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .nav-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--muted-2);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 14px 12px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      color: var(--text-2);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s;
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      text-align: left;
+      width: 100%;
+      letter-spacing: -0.1px;
+      position: relative;
+    }
+
+    .nav-item:hover { background: var(--card-2); color: var(--text); }
+
+    .nav-item.active {
+      background: var(--primary-soft);
+      color: var(--primary-deep);
+      font-weight: 700;
+    }
+
+    [data-theme="dark"] .nav-item.active { color: var(--primary-2); }
+
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 20px;
+      background: var(--primary);
+      border-radius: 0 3px 3px 0;
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      background: var(--c-red-bg);
+      color: var(--c-red-fg);
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 10px;
+      min-width: 18px;
+      text-align: center;
+    }
+
+    .sidebar-profile {
+      margin-top: auto;
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--card-2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: 0.15s;
+      border: 1px solid transparent;
+    }
+
+    .sidebar-profile:hover {
+      border-color: var(--border-2);
+      background: var(--card);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .profile-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--c-purple-fg), var(--c-blue-fg));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 6px 16px rgba(124, 58, 237, 0.3);
+    }
+
+    .profile-info { flex: 1; min-width: 0; }
+
+    .profile-info .name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: -0.2px;
+    }
+
+    .profile-info .status {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 1px;
+    }
+
+    /* ============================================================
+       MAIN
+    ============================================================ */
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 26px 40px 8px;
+      gap: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      color: var(--text);
+    }
+
+    .header-left p {
+      font-size: 13.5px;
+      color: var(--muted);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.15s;
+      position: relative;
+      font-size: 17px;
+      box-shadow: var(--shadow-xs);
+    }
+
+    .icon-btn:hover {
+      border-color: var(--border-2);
+      box-shadow: var(--shadow-sm);
+      transform: translateY(-1px);
+    }
+
+    .icon-btn .dot {
+      position: absolute;
+      top: 9px;
+      right: 9px;
+      width: 8px;
+      height: 8px;
+      background: var(--c-red-fg);
+      border-radius: 50%;
+      border: 2px solid var(--card);
+    }
+
+    .menu-toggle {
+      display: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    /* ============================================================
+       TABS
+    ============================================================ */
+    .tabs {
+      display: flex;
+      gap: 6px;
+      padding: 18px 40px 0;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .tabs::-webkit-scrollbar { display: none; }
+
+    .tab {
+      padding: 12px 18px;
+      border-radius: 12px 12px 0 0;
+      background: transparent;
+      border: none;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      transition: 0.15s;
+      white-space: nowrap;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: -0.1px;
+    }
+
+    .tab:hover { color: var(--text); background: var(--card-2); }
+
+    .tab.active {
+      color: var(--primary-deep);
+      background: var(--card);
+    }
+
+    [data-theme="dark"] .tab.active { color: var(--primary-2); }
+
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 12px;
+      right: 12px;
+      height: 2px;
+      background: var(--primary);
+      border-radius: 2px;
+    }
+
+    .tab-emoji { font-size: 15px; }
+
+    /* ============================================================
+       CONTEÚDO
+    ============================================================ */
+    .content {
+      padding: 28px 40px 60px;
+      max-width: 1400px;
+      width: 100%;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: fadeIn 0.25s ease; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ============================================================
+       STATS GRID
+    ============================================================ */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      transition: 0.15s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--border-2);
+    }
+
+    .stat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-bottom: 14px;
+    }
+
+    .stat-value {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: var(--text);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .stat-label {
+      font-size: 12.5px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .stat-trend {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 4px 9px;
+      border-radius: 20px;
+    }
+
+    .trend-up   { background: var(--c-green-bg); color: var(--c-green-fg); }
+    .trend-down { background: var(--c-red-bg);   color: var(--c-red-fg); }
+    .trend-flat { background: var(--card-2);     color: var(--muted); }
+
+    /* ÍCONES PASTEL */
+    .ic-green  { background: var(--c-green-bg);  color: var(--c-green-fg); }
+    .ic-blue   { background: var(--c-blue-bg);   color: var(--c-blue-fg); }
+    .ic-purple { background: var(--c-purple-bg); color: var(--c-purple-fg); }
+    .ic-pink   { background: var(--c-pink-bg);   color: var(--c-pink-fg); }
+    .ic-orange { background: var(--c-orange-bg); color: var(--c-orange-fg); }
+    .ic-yellow { background: var(--c-yellow-bg); color: var(--c-yellow-fg); }
+    .ic-red    { background: var(--c-red-bg);    color: var(--c-red-fg); }
+
+    /* ============================================================
+       CARD
+    ============================================================ */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+
+    .card-title-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    /* ============================================================
+       BOTÕES
+    ============================================================ */
+    .btn {
+      padding: 11px 18px;
+      border-radius: 12px;
+      border: none;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: 0.15s;
+      letter-spacing: -0.2px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      color: #fff;
+      box-shadow: var(--shadow-primary);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 32px rgba(0, 184, 92, 0.35);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-ghost {
+      background: var(--card-2);
+      color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      background: var(--card);
+      border-color: var(--border-2);
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: var(--c-red-bg);
+      color: var(--c-red-fg);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+    }
+
+    .btn-danger:hover {
+      background: var(--c-red-fg);
+      color: #fff;
+    }
+
+    .btn-sm { padding: 8px 14px; font-size: 12.5px; }
+
+    /* ============================================================
+       BUSCA / FILTROS
+    ============================================================ */
+    .filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      align-items: center;
+    }
+
+    .search-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .search-wrap input {
+      width: 100%;
+      padding: 12px 14px 12px 42px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 500;
+      outline: none;
+      transition: 0.15s;
+    }
+
+    .search-wrap input:focus {
+      border-color: var(--primary);
+      background: var(--card);
+      box-shadow: 0 0 0 4px var(--primary-soft);
+    }
+
+    .search-wrap .ico {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 15px;
+      pointer-events: none;
+    }
+
+    .filter-chip {
+      padding: 9px 14px;
+      border-radius: 20px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      color: var(--text-2);
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.15s;
+      font-family: inherit;
+    }
+
+    .filter-chip:hover { border-color: var(--primary); }
+
+    .filter-chip.active {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      color: var(--primary-deep);
+    }
+
+    [data-theme="dark"] .filter-chip.active { color: var(--primary-2); }
+
+    /* ============================================================
+       ALUNOS LISTA
+    ============================================================ */
+    .aluno-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .aluno-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      transition: 0.15s;
+      cursor: pointer;
+    }
+
+    .aluno-item:hover {
+      background: var(--card);
+      border-color: var(--primary);
+      transform: translateX(3px);
+    }
+
+    .aluno-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px var(--shadow-primary);
+    }
+
+    .aluno-info { flex: 1; min-width: 0; }
+
+    .aluno-info .nome {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .aluno-info .email {
+      font-size: 12.5px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .aluno-info .meta {
+      display: flex;
+      gap: 12px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .aluno-info .meta-item {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .aluno-badge {
+      padding: 5px 11px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .badge-ativo    { background: var(--c-green-bg);  color: var(--c-green-fg); }
+    .badge-pendente { background: var(--c-orange-bg); color: var(--c-orange-fg); }
+    .badge-inativo  { background: var(--card-2);      color: var(--muted); }
+
+    /* ============================================================
+       COMUNICADOS LISTA
+    ============================================================ */
+    .com-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .com-item {
+      padding: 16px 18px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      transition: 0.15s;
+      cursor: pointer;
+    }
+
+    .com-item:hover {
+      background: var(--card);
+      border-color: var(--primary);
+    }
+
+    .com-item .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .com-item .titulo {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+
+    .com-item .data {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .com-item .msg {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .com-item .autor {
+      font-size: 11.5px;
+      color: var(--muted-2);
+      font-weight: 700;
+      margin-top: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    /* ============================================================
+       FUNCIONÁRIOS LISTA
+    ============================================================ */
+    .func-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .func-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      transition: 0.15s;
+    }
+
+    .func-item:hover {
+      background: var(--card);
+      border-color: var(--border-2);
+    }
+
+    .func-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--c-purple-fg), var(--c-blue-fg));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+    }
+
+    /* ============================================================
+       EMPTY / SKELETON
+    ============================================================ */
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    .empty .emoji {
+      font-size: 44px;
+      display: block;
+      margin-bottom: 12px;
+      opacity: 0.7;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--card-2) 25%, var(--border) 50%, var(--card-2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 8px;
+      height: 14px;
+      margin: 6px 0;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ============================================================
+       MODAL
+    ============================================================ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 36, 23, 0.5);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal-overlay.show { display: flex; }
+
+    .modal {
+      background: var(--card);
+      border-radius: 22px;
+      padding: 26px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
+      animation: modalIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      border: 1px solid var(--border);
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.15s;
+    }
+
+    .modal-close:hover {
+      background: var(--c-red-bg);
+      color: var(--c-red-fg);
+      border-color: transparent;
+    }
+
+    .modal h3 {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.4px;
+      margin-bottom: 6px;
+    }
+
+    .modal .modal-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .modal-actions .btn { flex: 1; }
+
+    /* ============================================================
+       CAMPOS
+    ============================================================ */
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 500;
+      outline: none;
+      transition: 0.15s;
+      resize: vertical;
+    }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--primary);
+      background: var(--card);
+      box-shadow: 0 0 0 4px var(--primary-soft);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* ============================================================
+       DETALHE DO ALUNO (modal grande)
+    ============================================================ */
+    .aluno-hero {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px;
+      background: linear-gradient(135deg, var(--card-2), var(--primary-soft));
+      border-radius: 16px;
+      margin-bottom: 18px;
+    }
+
+    .aluno-hero-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: var(--shadow-primary);
+    }
+
+    .aluno-hero-info h3 {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.3px;
+      margin-bottom: 3px;
+    }
+
+    .aluno-hero-info p {
+      font-size: 12.5px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .info-section {
+      margin-bottom: 18px;
+    }
+
+    .info-section h4 {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .info-item {
+      padding: 12px 14px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .info-item .lbl {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .info-item .val {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.2px;
+      word-break: break-word;
+    }
+
+    .info-item .val.vazio {
+      color: var(--muted-2);
+      font-weight: 600;
+      font-size: 12.5px;
+    }
+
+    /* Histórico de treinos */
+    .hist-treino {
+      padding: 12px 14px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hist-treino.ativo {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+    }
+
+    .hist-treino .esq {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .hist-treino .nome {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hist-treino .meta {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 3px;
+    }
+
+    .hist-treino .badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      flex-shrink: 0;
+    }
+
+    .hist-treino .badge.ativo {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .hist-treino .badge.arquivado {
+      background: var(--card-2);
+      color: var(--muted);
+    }
+
+    /* ============================================================
+       TOAST
+    ============================================================ */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--text);
+      color: var(--bg);
+      border-radius: 14px;
+      padding: 13px 22px;
+      font-size: 13.5px;
+      font-weight: 700;
+      z-index: 1100;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: var(--shadow-lg);
+      max-width: 90vw;
+      letter-spacing: -0.2px;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ============================================================
+       RESPONSIVO
+    ============================================================ */
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+
+      .sidebar {
+        display: none;
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        width: 260px;
+        z-index: 200;
+        box-shadow: var(--shadow-lg);
+      }
+
+      .sidebar.open { display: flex; }
+      .menu-toggle { display: flex; }
+
+      .header { padding: 20px 20px 8px; }
+      .tabs { padding: 14px 20px 0; }
+      .content { padding: 20px 20px 60px; }
+    }
+
+    @media (max-width: 560px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr; }
+      .info-grid { grid-template-columns: 1fr; }
+      .aluno-item { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 2L4.5 13.5H11L10 22L19.5 9.5H12.5L13 2Z" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Triad Academia</h1>
+          <p>Painel administrativo</p>
+        </div>
+      </div>
+
+      <nav class="nav-section">
+        <div class="nav-label">Gestão</div>
+        <button class="nav-item active" onclick="mudarTab('dashboard')">
+          <span class="nav-icon">📊</span>
+          Dashboard
+        </button>
+        <button class="nav-item" onclick="mudarTab('alunos')">
+          <span class="nav-icon">👥</span>
+          Alunos
+          <span class="nav-badge" id="navBadgeAlunos" style="display:none;">0</span>
+        </button>
+        <button class="nav-item" onclick="mudarTab('funcionarios')">
+          <span class="nav-icon">🧑‍💼</span>
+          Funcionários
+        </button>
+        <button class="nav-item" onclick="mudarTab('comunicados')">
+          <span class="nav-icon">📢</span>
+          Comunicados
+        </button>
+
+        <div class="nav-label">Sistema</div>
+        <button class="nav-item" onclick="abrirModalHistoricoGlobal()">
+          <span class="nav-icon">📜</span>
+          Histórico
+        </button>
+      </nav>
+
+      <div class="sidebar-profile" onclick="abrirModalPerfil()">
+        <div class="profile-avatar" id="sideAvatar">?</div>
+        <div class="profile-info">
+          <div class="name" id="sideNome">Admin</div>
+          <div class="status">Equipe Triad</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <header class="header">
+        <div class="header-left" style="display:flex;align-items:center;gap:14px;">
+          <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+          <div>
+            <h1 id="pageTitle">Dashboard</h1>
+            <p id="pageSub">Visão geral da academia</p>
+          </div>
+        </div>
+        <div class="header-right">
+          <button class="icon-btn" onclick="toggleTheme()" title="Tema">
+            <span id="themeIcon">🌙</span>
+          </button>
+          <button class="icon-btn" onclick="abrirModalNovoComunicado()" title="Novo comunicado">
+            📢
+          </button>
+          <button class="icon-btn" onclick="abrirModalNovoFuncionario()" title="Novo funcionário">
+            ➕
+          </button>
+        </div>
+      </header>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <button class="tab active" data-tab="dashboard" onclick="mudarTab('dashboard')">
+          <span class="tab-emoji">📊</span> Dashboard
+        </button>
+        <button class="tab" data-tab="alunos" onclick="mudarTab('alunos')">
+          <span class="tab-emoji">👥</span> Alunos
+        </button>
+        <button class="tab" data-tab="funcionarios" onclick="mudarTab('funcionarios')">
+          <span class="tab-emoji">🧑‍💼</span> Funcionários
+        </button>
+        <button class="tab" data-tab="comunicados" onclick="mudarTab('comunicados')">
+          <span class="tab-emoji">📢</span> Comunicados
+        </button>
+      </div>
+
+      <!-- CONTEÚDO -->
+      <div class="content">
+
+        <!-- ===================== DASHBOARD ===================== -->
+        <div class="tab-panel active" id="panel-dashboard">
+          <div class="stats-grid" id="statsGrid">
+            <div class="stat-card" onclick="mudarTab('alunos')">
+              <div class="stat-icon ic-green">👥</div>
+              <div class="stat-value" id="statAlunos">0</div>
+              <div class="stat-label">Alunos cadastrados</div>
+            </div>
+            <div class="stat-card" onclick="mudarTab('alunos')">
+              <div class="stat-icon ic-orange">⏳</div>
+              <div class="stat-value" id="statPendentes">0</div>
+              <div class="stat-label">Cadastros pendentes</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon ic-blue">✅</div>
+              <div class="stat-value" id="statCheckinsHoje">0</div>
+              <div class="stat-label">Check-ins hoje</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon ic-purple">📊</div>
+              <div class="stat-value" id="statCheckinsSemana">0</div>
+              <div class="stat-label">Check-ins na semana</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-orange">🚨</div>
+                Alunos que precisam de atenção
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="mudarTab('alunos')">Ver todos</button>
+            </div>
+            <div id="listaAlertas">
+              <div class="skeleton" style="width:60%"></div>
+              <div class="skeleton" style="width:50%"></div>
+              <div class="skeleton" style="width:70%"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-green">📊</div>
+                Últimos check-ins da academia
+              </div>
+            </div>
+            <div id="listaCheckinsRecentes">
+              <div class="skeleton" style="width:60%"></div>
+              <div class="skeleton" style="width:50%"></div>
+              <div class="skeleton" style="width:70%"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-blue">👥</div>
+                Alunos recentes
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="mudarTab('alunos')">Ver todos</button>
+            </div>
+            <div id="listaAlunosRecentes">
+              <div class="skeleton" style="width:60%"></div>
+              <div class="skeleton" style="width:50%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================== ALUNOS ===================== -->
+        <div class="tab-panel" id="panel-alunos">
+          <div class="filters">
+            <div class="search-wrap">
+              <span class="ico">🔍</span>
+              <input type="text" id="buscaAluno" placeholder="Buscar por nome ou e-mail..." oninput="renderizarAlunos()" />
+            </div>
+            <button class="filter-chip active" data-filter="todos" onclick="filtrarAlunos('todos', this)">Todos</button>
+            <button class="filter-chip" data-filter="pendente" onclick="filtrarAlunos('pendente', this)">Pendentes</button>
+            <button class="filter-chip" data-filter="ativo" onclick="filtrarAlunos('ativo', this)">Ativos</button>
+          </div>
+
+          <div class="aluno-list" id="listaAlunos">
+            <div class="skeleton" style="width:80%"></div>
+            <div class="skeleton" style="width:60%"></div>
+            <div class="skeleton" style="width:70%"></div>
+          </div>
+        </div>
+
+        <!-- ===================== FUNCIONÁRIOS ===================== -->
+        <div class="tab-panel" id="panel-funcionarios">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-purple">🧑‍💼</div>
+                Equipe Triad
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="abrirModalNovoFuncionario()">
+                ➕ Adicionar funcionário
+              </button>
+            </div>
+
+            <div class="func-list" id="listaFuncionarios">
+              <div class="empty">
+                <span class="emoji">🧑‍💼</span>
+                Nenhum funcionário cadastrado ainda
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================== COMUNICADOS ===================== -->
+        <div class="tab-panel" id="panel-comunicados">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-pink">📢</div>
+                Comunicados publicados
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="abrirModalNovoComunicado()">
+                ➕ Novo comunicado
+              </button>
+            </div>
+
+            <div class="com-list" id="listaComunicados">
+              <div class="skeleton" style="width:80%"></div>
+              <div class="skeleton" style="width:70%"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay" onclick="fecharModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ============================================================
+       API
+    ============================================================ */
+    const API = axios.create({
+      baseURL: window.location.origin + '/api',
+      timeout: 10000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    /* ============================================================
+       ESTADO
+    ============================================================ */
+    let usuarioAtual = null;
+    let todosUsuarios = [];
+    let todosCheckins = [];
+    let comunicados = [];
+    let filtroAlunos = 'todos';
+
+    /* ============================================================
+       TEMA
+    ============================================================ */
+    function toggleTheme() {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', next);
+      document.getElementById('themeIcon').textContent = next === 'light' ? '🌙' : '☀️';
+      localStorage.setItem('triad_tema', next);
+    }
+
+    (function initTheme() {
+      const saved = localStorage.getItem('triad_tema') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      document.getElementById('themeIcon').textContent = saved === 'light' ? '🌙' : '☀️';
+    })();
+
+    /* ============================================================
+       INIT
+    ============================================================ */
+    (async function init() {
+      const salvo = localStorage.getItem('triad_usuario');
+      if (!salvo) { window.location.href = 'index.html'; return; }
+
+      try { usuarioAtual = JSON.parse(salvo); }
+      catch { window.location.href = 'index.html'; return; }
+
+      if (usuarioAtual.perfil !== 'funcionario') {
+        toast('Acesso restrito à equipe Triad');
+        setTimeout(() => window.location.href = 'home.html', 1200);
+        return;
+      }
+
+      montarSidebar();
+
+      await Promise.all([
+        carregarUsuarios(),
+        carregarCheckins(),
+        carregarComunicados()
+      ]);
+
+      renderizarDashboard();
+      renderizarAlunos();
+      renderizarFuncionarios();
+      renderizarComunicados();
+    })();
+
+    /* ============================================================
+       SIDEBAR
+    ============================================================ */
+    function montarSidebar() {
+      const nome = usuarioAtual.dadosPessoais?.nome || usuarioAtual.nome || 'Admin';
+      const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+      document.getElementById('sideAvatar').textContent = iniciais;
+      document.getElementById('sideNome').textContent = nome;
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    /* ============================================================
+       TABS
+    ============================================================ */
+    function mudarTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+      });
+      document.querySelectorAll('.tab-panel').forEach(p => {
+        p.classList.toggle('active', p.id === 'panel-' + tab);
+      });
+
+      const titulos = {
+        dashboard: ['Dashboard', 'Visão geral da academia'],
+        alunos: ['Alunos', 'Gestão de alunos da Triad'],
+        funcionarios: ['Funcionários', 'Equipe da academia'],
+        comunicados: ['Comunicados', 'Avisos para os alunos']
+      };
+      const [t, s] = titulos[tab] || ['Painel', ''];
+      document.getElementById('pageTitle').textContent = t;
+      document.getElementById('pageSub').textContent = s;
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ============================================================
+       CARREGAMENTO
+    ============================================================ */
+    async function carregarUsuarios() {
+      try {
+        const { data } = await API.get('/usuarios');
+        todosUsuarios = data.usuarios || [];
+      } catch { todosUsuarios = []; }
+    }
+
+    async function carregarCheckins() {
+      try {
+        const lista = [];
+        // Busca check-ins de cada aluno
+        for (const u of todosUsuarios) {
+          try {
+            const { data } = await API.get('/checkins/' + u.id);
+            (data.checkins || []).forEach(c => {
+              lista.push({ ...c, usuario: u });
+            });
+          } catch {}
+        }
+        lista.sort((a, b) => new Date(b.data) - new Date(a.data));
+        todosCheckins = lista;
+      } catch { todosCheckins = []; }
+    }
+
+    async function carregarComunicados() {
+      try {
+        const { data } = await API.get('/comunicados');
+        comunicados = data.comunicados || [];
+      } catch { comunicados = []; }
+    }
+
+    /* ============================================================
+       DASHBOARD
+    ============================================================ */
+    function renderizarDashboard() {
+      const alunos = todosUsuarios.filter(u => u.perfil === 'aluno');
+      const pendentes = alunos.filter(a => a.status === 'pendente');
+
+      document.getElementById('statAlunos').textContent = alunos.length;
+      document.getElementById('statPendentes').textContent = pendentes.length;
+
+      // Check-ins hoje
+      const hoje = new Date().toISOString().slice(0, 10);
+      const hojeQtd = todosCheckins.filter(c => c.data.slice(0, 10) === hoje).length;
+      document.getElementById('statCheckinsHoje').textContent = hojeQtd;
+
+      // Check-ins na semana
+      const agora = new Date();
+      const inicioSemana = new Date(agora);
+      inicioSemana.setDate(agora.getDate() - agora.getDay());
+      inicioSemana.setHours(0, 0, 0, 0);
+      const semanaQtd = todosCheckins.filter(c => new Date(c.data) >= inicioSemana).length;
+      document.getElementById('statCheckinsSemana').textContent = semanaQtd;
+
+      // Badge de pendentes
+      const badge = document.getElementById('navBadgeAlunos');
+      if (pendentes.length > 0) {
+        badge.style.display = 'inline-block';
+        badge.textContent = pendentes.length;
+      }
+
+      // Alertas
+      renderizarAlertas(pendentes);
+
+      // Últimos check-ins
+      renderizarCheckinsRecentes();
+
+      // Alunos recentes
+      renderizarAlunosRecentes(alunos);
+    }
+
+    function renderizarAlertas(pendentes) {
+      const container = document.getElementById('listaAlertas');
+
+      if (pendentes.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <span class="emoji">✨</span>
+            Nenhum aluno precisa de atenção
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="aluno-list">
+          ${pendentes.slice(0, 4).map(a => {
+            const nome = a.dadosPessoais?.nome || a.nome || 'Aluno';
+            const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+            return `
+              <div class="aluno-item" onclick="abrirDetalhesAluno('${a.id}')">
+                <div class="aluno-avatar">${iniciais}</div>
+                <div class="aluno-info">
+                  <div class="nome">${escapeHtml(nome)}</div>
+                  <div class="email">${escapeHtml(a.email || '')}</div>
+                  <div class="meta">
+                    <span class="meta-item">📅 Cadastro pendente</span>
+                  </div>
+                </div>
+                <span class="aluno-badge badge-pendente">Pendente</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function renderizarCheckinsRecentes() {
+      const container = document.getElementById('listaCheckinsRecentes');
+
+      if (todosCheckins.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <span class="emoji">📭</span>
+            Nenhum check-in registrado ainda
+          </div>`;
+        return;
+      }
+
+      const emojisHumor = { baixa: '😴', normal: '😐', disposto: '🔥', excelente: '💪' };
+
+      container.innerHTML = `
+        <div class="aluno-list">
+          ${todosCheckins.slice(0, 5).map(c => {
+            const nome = c.usuario?.dadosPessoais?.nome || c.usuario?.nome || 'Aluno';
+            const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+            return `
+              <div class="aluno-item" onclick="abrirDetalhesAluno('${c.usuario.id}')">
+                <div class="aluno-avatar">${iniciais}</div>
+                <div class="aluno-info">
+                  <div class="nome">${escapeHtml(nome)}</div>
+                  <div class="meta">
+                    <span class="meta-item">📅 ${formatarData(c.data)}</span>
+                    ${c.duracao ? `<span class="meta-item">⏱️ ${c.duracao}min</span>` : ''}
+                  </div>
+                </div>
+                <div style="font-size:22px;">${emojisHumor[c.humor] || '✅'}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function renderizarAlunosRecentes(alunos) {
+      const container = document.getElementById('listaAlunosRecentes');
+
+      if (alunos.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <span class="emoji">👥</span>
+            Nenhum aluno cadastrado ainda
+          </div>`;
+        return;
+      }
+
+      const recentes = alunos.slice().sort((a, b) => new Date(b.criadoEm) - new Date(a.criadoEm)).slice(0, 4);
+
+      container.innerHTML = `
+        <div class="aluno-list">
+          ${recentes.map(a => {
+            const nome = a.dadosPessoais?.nome || a.nome || 'Aluno';
+            const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+            return `
+              <div class="aluno-item" onclick="abrirDetalhesAluno('${a.id}')">
+                <div class="aluno-avatar">${iniciais}</div>
+                <div class="aluno-info">
+                  <div class="nome">${escapeHtml(nome)}</div>
+                  <div class="email">${escapeHtml(a.email || '')}</div>
+                </div>
+                <span class="aluno-badge ${a.status === 'ativo' ? 'badge-ativo' : 'badge-pendente'}">
+                  ${a.status || 'ativo'}
+                </span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    /* ============================================================
+       ALUNOS
+    ============================================================ */
+    function filtrarAlunos(filtro, el) {
+      filtroAlunos = filtro;
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      renderizarAlunos();
+    }
+
+    function renderizarAlunos() {
+      const container = document.getElementById('listaAlunos');
+      const busca = (document.getElementById('buscaAluno')?.value || '').toLowerCase().trim();
+
+      let alunos = todosUsuarios.filter(u => u.perfil === 'aluno');
+
+      if (filtroAlunos !== 'todos') {
+        alunos = alunos.filter(a => a.status === filtroAlunos);
+      }
+
+      if (busca) {
+        alunos = alunos.filter(a => {
+          const nome = (a.dadosPessoais?.nome || a.nome || '').toLowerCase();
+          const email = (a.email || '').toLowerCase();
+          return nome.includes(busca) || email.includes(busca);
+        });
+      }
+
+      if (alunos.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <span class="emoji">🔍</span>
+            Nenhum aluno encontrado
+          </div>`;
+        return;
+      }
+
+      // Ordena por criadoEm (mais recente primeiro)
+      alunos.sort((a, b) => new Date(b.criadoEm || 0) - new Date(a.criadoEm || 0));
+
+      container.innerHTML = alunos.map(a => {
+        const nome = a.dadosPessoais?.nome || a.nome || 'Aluno';
+        const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+        const checkinsDoAluno = todosCheckins.filter(c => c.usuarioId === a.id).length;
+
+        return `
+          <div class="aluno-item" onclick="abrirDetalhesAluno('${a.id}')">
+            <div class="aluno-avatar">${iniciais}</div>
+            <div class="aluno-info">
+              <div class="nome">${escapeHtml(nome)}</div>
+              <div class="email">${escapeHtml(a.email || '')}</div>
+              <div class="meta">
+                <span class="meta-item">✅ ${checkinsDoAluno} check-ins</span>
+                ${a.objetivos?.principal ? `<span class="meta-item">🎯 ${capitalize(a.objetivos.principal)}</span>` : ''}
+                ${a.objetivos?.nivel ? `<span class="meta-item">📊 ${capitalize(a.objetivos.nivel)}</span>` : ''}
+              </div>
+            </div>
+            <span class="aluno-badge ${a.status === 'ativo' ? 'badge-ativo' : 'badge-pendente'}">
+              ${a.status || 'ativo'}
+            </span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /* ============================================================
+       DETALHES DO ALUNO
+    ============================================================ */
+    async function abrirDetalhesAluno(id) {
+      const aluno = todosUsuarios.find(u => u.id === id);
+      if (!aluno) return;
+
+      const nome = aluno.dadosPessoais?.nome || aluno.nome || 'Aluno';
+      const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+      // Mostra loading
+      abrirModal(`
+        <div class="aluno-hero">
+          <div class="aluno-hero-avatar">${iniciais}</div>
+          <div class="aluno-hero-info">
+            <h3>${escapeHtml(nome)}</h3>
+            <p>${escapeHtml(aluno.email || '')}</p>
+          </div>
+        </div>
+        <div class="skeleton" style="width:60%"></div>
+        <div class="skeleton" style="width:80%"></div>
+        <div class="skeleton" style="width:70%"></div>
+      `);
+
+      // Busca histórico de treinos
+      let historicoTreinos = [];
+      try {
+        const { data } = await API.get('/usuarios/' + id + '/historico-treinos');
+        historicoTreinos = data.treinos || [];
+      } catch {}
+
+      // Check-ins do aluno
+      const checkinsAluno = todosCheckins.filter(c => c.usuarioId === id);
+
+      // Monta o modal
+      const dp = aluno.dadosPessoais || {};
+      const df = aluno.dadosFisicos || {};
+      const ob = aluno.objetivos || {};
+
+      abrirModal(`
+        <div class="aluno-hero">
+          <div class="aluno-hero-avatar">${iniciais}</div>
+          <div class="aluno-hero-info">
+            <h3>${escapeHtml(nome)}</h3>
+            <p>${escapeHtml(aluno.email || '')}</p>
+          </div>
+          <span class="aluno-badge ${aluno.status === 'ativo' ? 'badge-ativo' : 'badge-pendente'}" style="margin-left:auto;">
+            ${aluno.status || 'ativo'}
+          </span>
+        </div>
+
+        <div class="info-section">
+          <h4>👤 Dados pessoais</h4>
+          <div class="info-grid">
+            ${itemInfo('CPF', dp.cpf)}
+            ${itemInfo('Telefone', dp.telefone)}
+            ${itemInfo('Nascimento', dp.dataNascimento ? formatarDataBR(dp.dataNascimento) : null)}
+            ${itemInfo('Cidade', dp.endereco?.cidade ? `${dp.endereco.cidade}/${dp.endereco.estado}` : null)}
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h4>📏 Dados físicos</h4>
+          <div class="info-grid">
+            ${itemInfo('Peso', df.peso ? df.peso + ' kg' : null)}
+            ${itemInfo('Altura', df.altura ? df.altura + ' cm' : null)}
+            ${itemInfo('IMC', df.imc ? df.imc : null)}
+            ${itemInfo('Tipo corporal', df.tipoCorporal ? capitalize(df.tipoCorporal) : null)}
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h4>🎯 Objetivos</h4>
+          <div class="info-grid">
+            ${itemInfo('Objetivo', ob.principal ? capitalize(ob.principal) : null)}
+            ${itemInfo('Nível', ob.nivel ? capitalize(ob.nivel) : null)}
+            ${itemInfo('Frequência', ob.frequenciaSemanal ? ob.frequenciaSemanal + 'x/semana' : null)}
+            ${itemInfo('Restrições', ob.restricoes?.length ? ob.restricoes.join(', ') : null)}
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h4>📊 Atividade</h4>
+          <div class="info-grid">
+            ${itemInfo('Total check-ins', checkinsAluno.length)}
+            ${itemInfo('Último check-in', checkinsAluno[0] ? formatarData(checkinsAluno[0].data) : null)}
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h4>🏋️ Histórico de treinos (${historicoTreinos.length})</h4>
+          ${historicoTreinos.length === 0
+            ? `<div class="info-item"><div class="val vazio">Nenhum treino gerado ainda</div></div>`
+            : historicoTreinos.map(t => `
+              <div class="hist-treino ${t.ativo ? 'ativo' : ''}">
+                <div class="esq">
+                  <div class="nome">${escapeHtml(t.nome)}</div>
+                  <div class="meta">
+                    Versão ${t.versao} · ${formatarData(t.geradoEm)}
+                    ${t.motivo ? `· ${escapeHtml(t.motivo)}` : ''}
+                  </div>
+                </div>
+                <span class="badge ${t.ativo ? 'ativo' : 'arquivado'}">
+                  ${t.ativo ? 'Ativo' : 'Arquivado'}
+                </span>
+              </div>
+            `).join('')
+          }
+        </div>
+
+        <div class="modal-actions" style="flex-wrap:wrap;">
+          ${aluno.status === 'pendente' ? `
+            <button class="btn btn-primary" onclick="aprovarAluno('${aluno.id}')">
+              ✅ Aprovar cadastro
+            </button>
+          ` : ''}
+          <button class="btn btn-ghost" onclick="abrirModalGerarTreino('${aluno.id}')">
+            ✨ Gerar treino
+          </button>
+          <button class="btn btn-danger" onclick="confirmarRemover('${aluno.id}')">
+            🗑️ Remover
+          </button>
+        </div>
+      `);
+    }
+
+    function itemInfo(label, valor) {
+      if (valor === null || valor === undefined || valor === '') {
+        return `
+          <div class="info-item">
+            <div class="lbl">${escapeHtml(label)}</div>
+            <div class="val vazio">—</div>
+          </div>`;
+      }
+      return `
+        <div class="info-item">
+          <div class="lbl">${escapeHtml(label)}</div>
+          <div class="val">${escapeHtml(String(valor))}</div>
+        </div>`;
+    }
+
+    /* ============================================================
+       AÇÕES DO ALUNO
+    ============================================================ */
+    async function aprovarAluno(id) {
+      try {
+        await API.patch('/usuarios/' + id, { status: 'ativo' });
+        toast('✅ Aluno aprovado!');
+        await carregarUsuarios();
+        renderizarAlunos();
+        renderizarDashboard();
+        fecharModal();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao aprovar');
+      }
+    }
+
+    function abrirModalGerarTreino(id) {
+      abrirModal(`
+        <h3>✨ Gerar novo treino</h3>
+        <p class="modal-sub">
+          Isso criará um novo plano baseado nos dados atuais do aluno.
+          O treino anterior será arquivado no histórico.
+        </p>
+        <div class="field">
+          <label>Motivo (opcional)</label>
+          <input id="motivoTreino" type="text" placeholder="Ex.: Alteração de objetivo" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="gerarTreinoAdmin('${id}')">Gerar</button>
+        </div>
+      `);
+    }
+
+    async function gerarTreinoAdmin(id) {
+      const motivo = document.getElementById('motivoTreino')?.value.trim() || 'Recálculo pelo admin';
+
+      try {
+        await API.post('/usuarios/' + id + '/gerar-treino', { motivo });
+        toast('✨ Novo treino gerado!');
+        fecharModal();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao gerar treino');
+      }
+    }
+
+    function confirmarRemover(id) {
+      abrirModal(`
+        <h3>⚠️ Remover aluno</h3>
+        <p class="modal-sub">
+          Essa ação não pode ser desfeita. Todos os dados do aluno serão mantidos no banco
+          mas ele perderá acesso ao sistema.
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+          <button class="btn btn-danger" onclick="desativarAluno('${id}')">Desativar</button>
+        </div>
+      `);
+    }
+
+    async function desativarAluno(id) {
+      try {
+        await API.patch('/usuarios/' + id, { status: 'inativo' });
+        toast('Aluno desativado');
+        await carregarUsuarios();
+        renderizarAlunos();
+        renderizarDashboard();
+        fecharModal();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao desativar');
+      }
+    }
+
+    /* ============================================================
+       FUNCIONÁRIOS
+    ============================================================ */
+    function renderizarFuncionarios() {
+      const container = document.getElementById('listaFuncionarios');
+      const funcionarios = todosUsuarios.filter(u => u.perfil === 'funcionario');
+
+      if (funcionarios.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <span class="emoji">🧑‍💼</span>
+            Nenhum funcionário cadastrado ainda.<br>
+            Adicione membros da equipe para gerenciar a academia.
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = funcionarios.map(f => {
+        const nome = f.dadosPessoais?.nome || f.nome || 'Funcionário';
+        const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+        return `
+          <div class="func-item">
+            <div class="func-avatar">${iniciais}</div>
+            <div class="aluno-info" style="flex:1;">
+              <div class="nome">${escapeHtml(nome)}</div>
+              <div class="email">${escapeHtml(f.email || '')}</div>
+              <div class="meta">
+                <span class="meta-item">🧑‍💼 ${f.cargo || 'Funcionário'}</span>
+                <span class="meta-item">📅 Desde ${formatarData(f.criadoEm)}</span>
+              </div>
+            </div>
+            <span class="aluno-badge badge-ativo">${f.status || 'ativo'}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function abrirModalNovoFuncionario() {
+      abrirModal(`
+        <h3>➕ Adicionar funcionário</h3>
+        <p class="modal-sub">Cadastre um membro da equipe Triad.</p>
+
+        <div class="field">
+          <label>Nome completo</label>
+          <input id="funcNome" type="text" placeholder="Maria Silva" />
+        </div>
+
+        <div class="field">
+          <label>E-mail</label>
+          <input id="funcEmail" type="email" placeholder="maria@triad.com" />
+        </div>
+
+        <div class="field">
+          <label>Senha provisória</label>
+          <input id="funcSenha" type="text" value="triad123" />
+          <p style="font-size:11.5px;color:var(--muted);margin-top:6px;font-weight:500;">
+            O funcionário pode alterar depois. Mínimo 6 caracteres.
+          </p>
+        </div>
+
+        <div class="field">
+          <label>Cargo</label>
+          <select id="funcCargo">
+            <option value="Recepção">Recepção</option>
+            <option value="Instrutor">Instrutor</option>
+            <option value="Gerente">Gerente</option>
+            <option value="Personal">Personal Trainer</option>
+            <option value="Administrador">Administrador</option>
+          </select>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="criarFuncionario()">Criar funcionário</button>
+        </div>
+      `);
+    }
+
+    async function criarFuncionario() {
+      const nome = document.getElementById('funcNome').value.trim();
+      const email = document.getElementById('funcEmail').value.trim().toLowerCase();
+      const senha = document.getElementById('funcSenha').value;
+      const cargo = document.getElementById('funcCargo').value;
+
+      if (!nome || nome.length < 3) return toast('Informe um nome válido');
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('E-mail inválido');
+      if (!senha || senha.length < 6) return toast('Senha muito curta');
+
+      try {
+        await API.post('/cadastro', {
+          nome,
+          email,
+          senha,
+          perfil: 'funcionario'
+        });
+
+        // Salva o cargo via PATCH
+        const { data } = await API.get('/usuarios');
+        const novo = data.usuarios.find(u => u.email === email);
+        if (novo) {
+          await API.patch('/usuarios/' + novo.id, { cargo, status: 'ativo' });
+        }
+
+        fecharModal();
+        toast('✅ Funcionário cadastrado!');
+        await carregarUsuarios();
+        renderizarFuncionarios();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao criar funcionário');
+      }
+    }
+
+    /* ============================================================
+       COMUNICADOS
+    ============================================================ */
+    function renderizarComunicados() {
+      const container = document.getElementById('listaComunicados');
+
+      if (comunicados.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <span class="emoji">📭</span>
+            Nenhum comunicado publicado.<br>
+            Crie o primeiro aviso para os alunos.
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = comunicados.slice().reverse().map(c => `
+        <div class="com-item" onclick="verComunicado('${c.id}')">
+          <div class="top">
+            <div class="titulo">${escapeHtml(c.titulo)}</div>
+            <div class="data">${formatarData(c.criadoEm)}</div>
+          </div>
+          <div class="msg">${escapeHtml(c.mensagem)}</div>
+          <div class="autor">${escapeHtml(c.autor || 'sistema')}</div>
+        </div>
+      `).join('');
+    }
+
+    function abrirModalNovoComunicado() {
+      abrirModal(`
+        <h3>📢 Novo comunicado</h3>
+        <p class="modal-sub">Envie um aviso para todos os alunos.</p>
+
+        <div class="field">
+          <label>Título</label>
+          <input id="comTitulo" type="text" placeholder="Ex.: Novo horário de funcionamento" />
+        </div>
+
+        <div class="field">
+          <label>Mensagem</label>
+          <textarea id="comMsg" rows="4" placeholder="Escreva o comunicado..."></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="publicarComunicado()">Publicar</button>
+        </div>
+      `);
+    }
+
+    async function publicarComunicado() {
+      const titulo = document.getElementById('comTitulo').value.trim();
+      const mensagem = document.getElementById('comMsg').value.trim();
+
+      if (!titulo || !mensagem) return toast('Preencha título e mensagem');
+
+      try {
+        await API.post('/comunicados', {
+          titulo,
+          mensagem,
+          autor: usuarioAtual.dadosPessoais?.nome || usuarioAtual.nome || 'Equipe Triad'
+        });
+        fecharModal();
+        toast('✅ Comunicado publicado!');
+        await carregarComunicados();
+        renderizarComunicados();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao publicar');
+      }
+    }
+
+    function verComunicado(id) {
+      const c = comunicados.find(x => x.id === id);
+      if (!c) return;
+      abrirModal(`
+        <h3>${escapeHtml(c.titulo)}</h3>
+        <p class="modal-sub" style="white-space:pre-wrap;">${escapeHtml(c.mensagem)}</p>
+        <div style="font-size:11.5px;color:var(--muted-2);font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">
+          ${escapeHtml(c.autor || 'sistema')} · ${formatarData(c.criadoEm)}
+        </div>
+      `);
+    }
+
+    /* ============================================================
+       HISTÓRICO GLOBAL
+    ============================================================ */
+    async function abrirModalHistoricoGlobal() {
+      abrirModal(`
+        <h3>📜 Histórico de atividades</h3>
+        <p class="modal-sub">Últimas ações registradas no sistema.</p>
+        <div id="historicoLista">
+          <div class="skeleton" style="width:60%"></div>
+          <div class="skeleton" style="width:80%"></div>
+          <div class="skeleton" style="width:50%"></div>
+        </div>
+      `);
+
+      try {
+        const { data } = await API.get('/historico?limite=30');
+        const hist = data.historico || [];
+
+        const container = document.getElementById('historicoLista');
+        if (hist.length === 0) {
+          container.innerHTML = `
+            <div class="empty">
+              <span class="emoji">📭</span>
+              Nenhuma atividade registrada
+            </div>`;
+          return;
+        }
+
+        const icones = {
+          usuario_criado: '👤',
+          conta_ativada: '✅',
+          perfil_atualizado: '📝',
+          treino_gerado: '🏋️'
+        };
+
+        container.innerHTML = hist.map(h => `
+          <div class="hist-treino" style="margin-bottom:6px;">
+            <div class="esq">
+              <div class="nome">${icones[h.tipo] || '📌'} ${formatarTipoHistorico(h.tipo)}</div>
+              <div class="meta">${formatarData(h.data)}</div>
+            </div>
+          </div>
+        `).join('');
+      } catch {
+        document.getElementById('historicoLista').innerHTML = `
+          <div class="empty"><span class="emoji">📭</span>Erro ao carregar</div>`;
+      }
+    }
+
+    function formatarTipoHistorico(tipo) {
+      const nomes = {
+        usuario_criado: 'Novo usuário cadastrado',
+        conta_ativada: 'Conta ativada',
+        perfil_atualizado: 'Perfil atualizado',
+        treino_gerado: 'Treino gerado'
+      };
+      return nomes[tipo] || tipo;
+    }
+
+    /* ============================================================
+       PERFIL
+    ============================================================ */
+    function abrirModalPerfil() {
+      const nome = usuarioAtual.dadosPessoais?.nome || usuarioAtual.nome || 'Admin';
+      const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+      abrirModal(`
+        <div style="text-align:center;margin-bottom:22px;">
+          <div style="width:80px;height:80px;border-radius:22px;background:linear-gradient(135deg,var(--c-purple-fg),var(--c-blue-fg));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;margin:0 auto 14px;box-shadow:0 12px 32px rgba(124,58,237,0.3);">${iniciais}</div>
+          <h3 style="margin-bottom:4px;">${escapeHtml(nome)}</h3>
+          <p style="margin-bottom:0;color:var(--muted);font-size:13px;">${escapeHtml(usuarioAtual.email || '')}</p>
+        </div>
+        <button class="btn btn-danger" style="width:100%;" onclick="logout()">Sair da conta</button>
+      `);
+    }
+
+    function logout() {
+      localStorage.removeItem('triad_usuario');
+      window.location.href = 'index.html';
+    }
+
+    /* ============================================================
+       MODAL GENÉRICO
+    ============================================================ */
+    function abrirModal(html) {
+      document.getElementById('modalBody').innerHTML = html;
+      document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    function fecharModal(e) {
+      if (e && e.target !== document.getElementById('modalOverlay')) return;
+      document.getElementById('modalOverlay').classList.remove('show');
+    }
+
+    /* ============================================================
+       HELPERS
+    ============================================================ */
+    function capitalize(str) {
+      if (!str) return '';
+      return String(str).charAt(0).toUpperCase() + String(str).slice(1);
+    }
+
+    function escapeHtml(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatarData(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      const diff = (new Date() - d) / 1000;
+      if (diff < 60) return 'agora';
+      if (diff < 3600) return Math.floor(diff / 60) + ' min atrás';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h atrás';
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+    }
+
+    function formatarDataBR(iso) {
+      if (!iso) return '—';
+      const [a, m, d] = iso.split('-');
+      return `${d}/${m}/${a}`;
+    }
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show';
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.remove('show'), 3200);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Triad Academia | Complete seu perfil</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <link rel="stylesheet" href="assets/style.css" />
+
+  <style>
+    /* ============================================================
+       WRAPPER
+    ============================================================ */
+    body {
+      background: var(--bg);
+      padding: 24px 16px;
+    }
+
+    .wrapper {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    /* ============================================================
+       HEADER
+    ============================================================ */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 26px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-primary);
+      flex-shrink: 0;
+    }
+
+    .brand-logo svg { width: 22px; height: 22px; }
+
+    .brand-text h1 {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .brand-text p {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 1px;
+    }
+
+    .theme-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.15s;
+      font-size: 16px;
+      box-shadow: var(--shadow-xs);
+    }
+
+    .theme-toggle:hover {
+      border-color: var(--border-2);
+      transform: translateY(-1px);
+    }
+
+    /* ============================================================
+       PROGRESS STEPS
+    ============================================================ */
+    .steps {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 26px;
+    }
+
+    .step {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .step-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .step-bar::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, var(--primary), var(--primary-2));
+      border-radius: 4px;
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .step.done .step-bar::after,
+    .step.active .step-bar::after {
+      transform: scaleX(1);
+    }
+
+    .step.active .step-bar::after {
+      box-shadow: 0 0 10px var(--glow);
+    }
+
+    .step-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: 0.2s;
+    }
+
+    .step.active .step-label,
+    .step.done .step-label {
+      color: var(--primary-deep);
+    }
+
+    [data-theme="dark"] .step.active .step-label,
+    [data-theme="dark"] .step.done .step-label {
+      color: var(--primary-2);
+    }
+
+    /* ============================================================
+       CARD
+    ============================================================ */
+    .card.onboarding {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 32px;
+      box-shadow: var(--shadow-md);
+      position: relative;
+      overflow: hidden;
+      transition: 0.3s;
+    }
+
+    .card.onboarding::before {
+      content: '';
+      position: absolute;
+      top: -80px;
+      right: -80px;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, var(--primary-soft-2), transparent 70%);
+      border-radius: 50%;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    [data-theme="dark"] .card.onboarding::before {
+      background: radial-gradient(circle, rgba(0, 230, 118, 0.12), transparent 70%);
+    }
+
+    /* ============================================================
+       STEPS
+    ============================================================ */
+    .form-step {
+      display: none;
+      position: relative;
+      z-index: 2;
+      animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .form-step.active { display: block; }
+
+    .step-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .step-title .icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .step-title h2 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .step-desc {
+      font-size: 13.5px;
+      color: var(--muted);
+      font-weight: 500;
+      line-height: 1.5;
+      margin-bottom: 24px;
+      margin-left: 54px;
+    }
+
+    /* ============================================================
+       CHIPS
+    ============================================================ */
+    .chips {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .chip {
+      padding: 14px 12px;
+      border-radius: 14px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      cursor: pointer;
+      transition: 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: inherit;
+      color: var(--text-2);
+      text-align: left;
+    }
+
+    .chip:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .chip.active {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      color: var(--primary-deep);
+      box-shadow: 0 0 0 3px var(--primary-soft);
+    }
+
+    [data-theme="dark"] .chip.active { color: var(--primary-2); }
+
+    .chip .emoji {
+      font-size: 22px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .chip .chip-info { min-width: 0; }
+
+    .chip .chip-info strong {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+      color: inherit;
+    }
+
+    .chip .chip-info span {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 500;
+      opacity: 0.75;
+      margin-top: 2px;
+    }
+
+    /* ============================================================
+       DIAS DA SEMANA
+    ============================================================ */
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    @media (max-width: 520px) {
+      .days-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .day-btn {
+      padding: 12px 4px;
+      border-radius: 12px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      cursor: pointer;
+      transition: 0.15s;
+      font-family: inherit;
+      color: var(--text-2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .day-btn:hover { border-color: var(--primary); }
+
+    .day-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      box-shadow: 0 4px 12px var(--shadow-primary);
+    }
+
+    .day-btn .day-short {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+
+    .day-btn .day-num {
+      font-size: 10px;
+      font-weight: 600;
+      opacity: 0.7;
+    }
+
+    /* ============================================================
+       STEPPER
+    ============================================================ */
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .stepper button {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.15s;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+    }
+
+    .stepper button:hover {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      color: var(--primary-deep);
+    }
+
+    .stepper button:active { transform: scale(0.94); }
+
+    .stepper input {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 800;
+      padding: 13px 12px;
+    }
+
+    /* ============================================================
+       IMC BADGE
+    ============================================================ */
+    .imc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+
+    .imc-badge.ok      { background: var(--c-green-bg);  color: var(--c-green-fg); }
+    .imc-badge.under   { background: var(--c-blue-bg);   color: var(--c-blue-fg); }
+    .imc-badge.over    { background: var(--c-orange-bg); color: var(--c-orange-fg); }
+    .imc-badge.obese   { background: var(--c-red-bg);    color: var(--c-red-fg); }
+
+    /* ============================================================
+       REVISÃO
+    ============================================================ */
+    .review-grid {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+
+    .review-block {
+      background: var(--card-2);
+      border-radius: 14px;
+      padding: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .review-block h4 {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .review-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 13px;
+      border-bottom: 1px dashed var(--border);
+      gap: 12px;
+    }
+
+    .review-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .review-item:first-child { padding-top: 0; }
+
+    .review-item .lbl {
+      color: var(--muted);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .review-item .val {
+      color: var(--text);
+      font-weight: 700;
+      text-align: right;
+      letter-spacing: -0.1px;
+      word-break: break-word;
+    }
+
+    /* ============================================================
+       ACTIONS
+    ============================================================ */
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 28px;
+      padding-top: 22px;
+      border-top: 1px solid var(--border);
+      position: relative;
+      z-index: 2;
+    }
+
+    .actions .btn-primary { flex: 1; }
+
+    /* ============================================================
+       LOADING OVERLAY
+    ============================================================ */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 36, 23, 0.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 1200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      padding: 24px;
+    }
+
+    .loading-overlay.show { display: flex; }
+
+    .loading-card {
+      background: var(--card);
+      border-radius: 22px;
+      padding: 32px 28px;
+      max-width: 340px;
+      width: 100%;
+      text-align: center;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      animation: modalIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .loading-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 18px;
+      font-size: 32px;
+      color: #fff;
+      box-shadow: var(--shadow-primary);
+      animation: pulseIcon 1.6s ease-in-out infinite;
+    }
+
+    @keyframes pulseIcon {
+      0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(0, 184, 92, 0.25); }
+      50% { transform: scale(1.06); box-shadow: 0 16px 44px rgba(0, 184, 92, 0.4); }
+    }
+
+    .loading-card h3 {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: -0.3px;
+    }
+
+    .loading-card p {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    .loading-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--card-2);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 18px;
+    }
+
+    .loading-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--primary-2));
+      border-radius: 6px;
+      width: 0%;
+      transition: width 0.4s ease;
+      box-shadow: 0 0 10px rgba(0, 184, 92, 0.5);
+    }
+
+    /* ============================================================
+       CEP — spinner inline
+    ============================================================ */
+    .cep-status {
+      font-size: 11.5px;
+      margin-top: 5px;
+      font-weight: 600;
+      display: none;
+    }
+
+    .cep-status.show { display: block; }
+    .cep-status.loading { color: var(--muted); }
+    .cep-status.success { color: var(--c-green-fg); }
+    .cep-status.error { color: var(--c-red-fg); }
+
+    /* ============================================================
+       RESPONSIVO
+    ============================================================ */
+    @media (max-width: 560px) {
+      body { padding: 16px 12px; }
+      .card.onboarding { padding: 22px 18px; border-radius: 18px; }
+      .step-title h2 { font-size: 18px; }
+      .step-title .icon { width: 38px; height: 38px; font-size: 18px; }
+      .step-desc { margin-left: 50px; font-size: 13px; }
+      .actions { flex-direction: column-reverse; }
+      .actions .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wrapper">
+
+    <!-- HEADER -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 2L4.5 13.5H11L10 22L19.5 9.5H12.5L13 2Z" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Triad Academia</h1>
+          <p>Complete seu perfil</p>
+        </div>
+      </div>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+        <span id="themeIcon">🌙</span>
+      </button>
+    </header>
+
+    <!-- STEPS -->
+    <div class="steps" id="stepsBar">
+      <div class="step active" data-step="1">
+        <div class="step-bar"></div>
+        <span class="step-label">Pessoais</span>
+      </div>
+      <div class="step" data-step="2">
+        <div class="step-bar"></div>
+        <span class="step-label">Físicos</span>
+      </div>
+      <div class="step" data-step="3">
+        <div class="step-bar"></div>
+        <span class="step-label">Objetivos</span>
+      </div>
+      <div class="step" data-step="4">
+        <div class="step-bar"></div>
+        <span class="step-label">Revisão</span>
+      </div>
+    </div>
+
+    <!-- CARD -->
+    <div class="card onboarding">
+
+      <!-- ============================================================
+           PASSO 1 — DADOS PESSOAIS
+      ============================================================ -->
+      <form class="form-step active" id="step-1" onsubmit="return false;">
+        <div class="step-title">
+          <div class="icon ic-green">👤</div>
+          <h2>Dados pessoais</h2>
+        </div>
+        <p class="step-desc">
+          Vamos começar com suas informações básicas para identificação na academia.
+        </p>
+
+        <div class="field">
+          <label for="nome">Nome completo <span style="color:var(--c-red-fg)">*</span></label>
+          <input type="text" id="nome" placeholder="João Pereira da Silva" autocomplete="name" oninput="checarPasso1()" />
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="cpf">CPF</label>
+            <input type="text" id="cpf" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)" />
+          </div>
+          <div class="field">
+            <label for="nascimento">Data de nascimento</label>
+            <input type="date" id="nascimento" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="telefone">Telefone / WhatsApp <span style="color:var(--c-red-fg)">*</span></label>
+          <input type="tel" id="telefone" placeholder="(11) 99999-9999" autocomplete="tel" oninput="mascaraTelefone(this); checarPasso1()" />
+        </div>
+
+        <div class="field">
+          <label>Endereço</label>
+          <div class="row" style="grid-template-columns: 1fr 2fr; margin-top: 4px;">
+            <input type="text" id="cep" placeholder="CEP" maxlength="9" oninput="mascaraCEP(this); buscarCEP(this)" />
+            <input type="text" id="cidade" placeholder="Cidade" />
+          </div>
+          <div class="cep-status" id="cepStatus"></div>
+
+          <div class="row" style="margin-top: 8px; grid-template-columns: 2fr 1fr;">
+            <input type="text" id="rua" placeholder="Rua / Avenida" />
+            <input type="text" id="estado" placeholder="UF" maxlength="2" />
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <input type="text" id="numero" placeholder="Número" />
+            <input type="text" id="bairro" placeholder="Bairro" />
+          </div>
+          <div style="margin-top: 8px;">
+            <input type="text" id="complemento" placeholder="Complemento (opcional)" style="width:100%;" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Contato de emergência (opcional)</label>
+          <div class="row" style="margin-top: 4px;">
+            <input type="text" id="emergenciaNome" placeholder="Nome" />
+            <input type="tel" id="emergenciaTel" placeholder="Telefone" oninput="mascaraTelefone(this)" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="cancelarOnboarding()">Cancelar</button>
+          <button class="btn btn-primary" id="btnStep1" onclick="avancar(1)">
+            Continuar →
+          </button>
+        </div>
+      </form>
+
+      <!-- ============================================================
+           PASSO 2 — DADOS FÍSICOS
+      ============================================================ -->
+      <form class="form-step" id="step-2" onsubmit="return false;">
+        <div class="step-title">
+          <div class="icon ic-blue">📏</div>
+          <h2>Dados físicos</h2>
+        </div>
+        <p class="step-desc">
+          Esses dados permitem calcular seu IMC e personalizar as cargas do treino.
+        </p>
+
+        <div class="row">
+          <div class="field">
+            <label for="peso">Peso (kg) <span style="color:var(--c-red-fg)">*</span></label>
+            <input type="number" id="peso" placeholder="70" min="30" max="250" step="0.1" oninput="atualizarIMC(); checarPasso2()" />
+          </div>
+          <div class="field">
+            <label for="altura">Altura (cm) <span style="color:var(--c-red-fg)">*</span></label>
+            <input type="number" id="altura" placeholder="175" min="100" max="250" oninput="atualizarIMC(); checarPasso2()" />
+          </div>
+        </div>
+
+        <div class="field" id="imcWrapper" style="display:none;">
+          <label>IMC estimado</label>
+          <div style="display:flex;align-items:center;gap:8px;padding:13px 15px;background:var(--card-2);border:1.5px solid var(--border);border-radius:13px;">
+            <span style="font-size:20px;font-weight:800;color:var(--text);" id="imcValor">—</span>
+            <span class="imc-badge" id="imcBadge">—</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:5px;font-weight:500;">
+            Cálculo automático: peso ÷ altura²
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Tipo corporal</label>
+          <div class="chips" id="chipsTipoCorporal">
+            <button type="button" class="chip" data-value="ectomorfo" onclick="selecionarChip(this, 'tipoCorporal')">
+              <span class="emoji">🏃</span>
+              <div class="chip-info">
+                <strong>Ectomorfo</strong>
+                <span>Magro, dificuldade em ganhar massa</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="mesomorfo" onclick="selecionarChip(this, 'tipoCorporal')">
+              <span class="emoji">💪</span>
+              <div class="chip-info">
+                <strong>Mesomorfo</strong>
+                <span>Atleta natural, ganha massa fácil</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="endomorfo" onclick="selecionarChip(this, 'tipoCorporal')">
+              <span class="emoji">🧸</span>
+              <div class="chip-info">
+                <strong>Endomorfo</strong>
+                <span>Estrutura mais larga, acumula gordura</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="nao_sei" onclick="selecionarChip(this, 'tipoCorporal')">
+              <span class="emoji">❓</span>
+              <div class="chip-info">
+                <strong>Não sei</strong>
+                <span>Prefiro pular esta etapa</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="percentualGordura">Percentual de gordura estimado (%) — opcional</label>
+          <input type="number" id="percentualGordura" placeholder="Ex.: 18" min="3" max="60" step="0.1" />
+        </div>
+
+        <div class="field">
+          <label>Medidas (cm) — opcional</label>
+          <div class="row" style="margin-top: 4px;">
+            <input type="number" id="medidaPeito" placeholder="Peito" min="40" max="200" />
+            <input type="number" id="medidaCintura" placeholder="Cintura" min="40" max="200" />
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <input type="number" id="medidaQuadril" placeholder="Quadril" min="40" max="200" />
+            <input type="number" id="medidaBraco" placeholder="Braço" min="15" max="80" />
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <input type="number" id="medidaCoxa" placeholder="Coxa" min="30" max="120" />
+            <div></div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="voltar(2)">← Voltar</button>
+          <button class="btn btn-primary" id="btnStep2" onclick="avancar(2)">Continuar →</button>
+        </div>
+      </form>
+
+      <!-- ============================================================
+           PASSO 3 — OBJETIVOS
+      ============================================================ -->
+      <form class="form-step" id="step-3" onsubmit="return false;">
+        <div class="step-title">
+          <div class="icon ic-purple">🎯</div>
+          <h2>Seus objetivos</h2>
+        </div>
+        <p class="step-desc">
+          Quanto mais claro for seu objetivo, mais preciso será seu treino.
+        </p>
+
+        <div class="field">
+          <label>Objetivo principal <span style="color:var(--c-red-fg)">*</span></label>
+          <div class="chips" id="chipsObjetivo">
+            <button type="button" class="chip" data-value="hipertrofia" onclick="selecionarChip(this, 'objetivoPrincipal')">
+              <span class="emoji">💪</span>
+              <div class="chip-info">
+                <strong>Hipertrofia</strong>
+                <span>Ganhar massa muscular</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="forca" onclick="selecionarChip(this, 'objetivoPrincipal')">
+              <span class="emoji">🏋️</span>
+              <div class="chip-info">
+                <strong>Força</strong>
+                <span>Aumentar cargas</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="emagrecimento" onclick="selecionarChip(this, 'objetivoPrincipal')">
+              <span class="emoji">🔥</span>
+              <div class="chip-info">
+                <strong>Emagrecimento</strong>
+                <span>Reduzir gordura</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="resistencia" onclick="selecionarChip(this, 'objetivoPrincipal')">
+              <span class="emoji">🏃</span>
+              <div class="chip-info">
+                <strong>Resistência</strong>
+                <span>Condicionamento físico</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="condicionamento" onclick="selecionarChip(this, 'objetivoPrincipal')">
+              <span class="emoji">✨</span>
+              <div class="chip-info">
+                <strong>Bem-estar</strong>
+                <span>Saúde e disposição</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Seu nível de experiência <span style="color:var(--c-red-fg)">*</span></label>
+          <div class="chips" id="chipsNivel">
+            <button type="button" class="chip" data-value="iniciante" onclick="selecionarChip(this, 'nivel')">
+              <span class="emoji">🌱</span>
+              <div class="chip-info">
+                <strong>Iniciante</strong>
+                <span>Até 6 meses treinando</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="intermediario" onclick="selecionarChip(this, 'nivel')">
+              <span class="emoji">🌿</span>
+              <div class="chip-info">
+                <strong>Intermediário</strong>
+                <span>6 meses a 2 anos</span>
+              </div>
+            </button>
+            <button type="button" class="chip" data-value="avancado" onclick="selecionarChip(this, 'nivel')">
+              <span class="emoji">🌳</span>
+              <div class="chip-info">
+                <strong>Avançado</strong>
+                <span>Mais de 2 anos</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="frequencia">Quantas vezes por semana você quer treinar? <span style="color:var(--c-red-fg)">*</span></label>
+          <div class="stepper" style="margin-top: 4px;">
+            <button type="button" onclick="ajustarFrequencia(-1)">−</button>
+            <input type="number" id="frequencia" value="4" min="2" max="6" readonly />
+            <button type="button" onclick="ajustarFrequencia(1)">+</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:5px;font-weight:500;">
+            Recomendado: 3 a 5 vezes por semana.
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Quais dias você pode treinar?</label>
+          <div class="days-grid" id="diasGrid">
+            <button type="button" class="day-btn" data-dia="segunda" onclick="toggleDia(this)">
+              <span class="day-short">Seg</span><span class="day-num">S</span>
+            </button>
+            <button type="button" class="day-btn" data-dia="terca" onclick="toggleDia(this)">
+              <span class="day-short">Ter</span><span class="day-num">T</span>
+            </button>
+            <button type="button" class="day-btn" data-dia="quarta" onclick="toggleDia(this)">
+              <span class="day-short">Qua</span><span class="day-num">Q</span>
+            </button>
+            <button type="button" class="day-btn" data-dia="quinta" onclick="toggleDia(this)">
+              <span class="day-short">Qui</span><span class="day-num">Q</span>
+            </button>
+            <button type="button" class="day-btn" data-dia="sexta" onclick="toggleDia(this)">
+              <span class="day-short">Sex</span><span class="day-num">S</span>
+            </button>
+            <button type="button" class="day-btn" data-dia="sabado" onclick="toggleDia(this)">
+              <span class="day-short">Sáb</span><span class="day-num">S</span>
+            </button>
+            <button type="button" class="day-btn" data-dia="domingo" onclick="toggleDia(this)">
+              <span class="day-short">Dom</span><span class="day-num">D</span>
+            </button>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:8px;font-weight:500;">
+            Se não escolher, o sistema distribui automaticamente.
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="tempoSessao">Tempo disponível por sessão</label>
+          <select id="tempoSessao">
+            <option value="30">30 minutos</option>
+            <option value="45">45 minutos</option>
+            <option value="60" selected>1 hora</option>
+            <option value="75">1h15</option>
+            <option value="90">1h30 ou mais</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="restricoes">Restrições ou lesões (opcional)</label>
+          <textarea id="restricoes" rows="2" placeholder="Ex.: dor no ombro direito, hérnia de disco..."></textarea>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:5px;font-weight:500;">
+            O gerador evita exercícios que agridem essas regiões.
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="voltar(3)">← Voltar</button>
+          <button class="btn btn-primary" id="btnStep3" onclick="avancar(3)">Revisar →</button>
+        </div>
+      </form>
+
+      <!-- ============================================================
+           PASSO 4 — REVISÃO
+      ============================================================ -->
+      <form class="form-step" id="step-4" onsubmit="return false;">
+        <div class="step-title">
+          <div class="icon ic-orange">✅</div>
+          <h2>Revisar e confirmar</h2>
+        </div>
+        <p class="step-desc">
+          Confira suas informações. Ao confirmar, o sistema gerará automaticamente seu plano de treino personalizado.
+        </p>
+
+        <div class="review-grid">
+          <div class="review-block">
+            <h4>👤 Dados pessoais</h4>
+            <div id="reviewPessoais"></div>
+          </div>
+
+          <div class="review-block">
+            <h4>📏 Dados físicos</h4>
+            <div id="reviewFisicos"></div>
+          </div>
+
+          <div class="review-block">
+            <h4>🎯 Objetivos</h4>
+            <div id="reviewObjetivos"></div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="voltar(4)">← Voltar</button>
+          <button class="btn btn-primary" id="btnFinalizar" onclick="finalizar()">
+            ✨ Gerar meu treino
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- LOADING OVERLAY -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-card">
+      <div class="loading-icon" id="loadingIcon">✨</div>
+      <h3 id="loadingTitle">Gerando seu treino...</h3>
+      <p id="loadingMsg">Analisando seus dados e objetivos</p>
+      <div class="loading-bar">
+        <div class="loading-bar-fill" id="loadingBar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCRIPTS
+  ============================================================ -->
+  <script src="assets/salvarBD.js"></script>
+  <script src="assets/script.js"></script>
+  <script src="assets/auth.js"></script>
+
+  <script>
+    /* ============================================================
+       ESTADO
+    ============================================================ */
+    let usuarioAtual = null;
+    let passoAtual = 1;
+
+    const dados = {
+      pessoais: {},
+      fisicos: {},
+      objetivos: {
+        tipoCorporal: null,
+        objetivoPrincipal: null,
+        nivel: null,
+        frequenciaSemanal: 4,
+        diasDisponiveis: [],
+        tempoPorSessao: 60,
+        restricoes: []
+      }
+    };
+
+    /* ============================================================
+       INIT
+    ============================================================ */
+    (async function init() {
+      usuarioAtual = await validarSessao();
+      if (!usuarioAtual) return;
+
+      // Se já completou o perfil → home
+      if (usuarioAtual.dadosFisicos && usuarioAtual.objetivos) {
+        window.location.href = 'home.html';
+        return;
+      }
+
+      // Pré-preenche o nome
+      const nomeCompleto = usuarioAtual.dadosPessoais?.nome || usuarioAtual.nome || '';
+      document.getElementById('nome').value = nomeCompleto;
+
+      if (usuarioAtual.dadosPessoais?.telefone) {
+        document.getElementById('telefone').value = usuarioAtual.dadosPessoais.telefone;
+      }
+
+      checarPasso1();
+    })();
+
+    /* ============================================================
+       NAVEGAÇÃO
+    ============================================================ */
+    function irParaPasso(n) {
+      if (n > passoAtual && !validarPasso(passoAtual)) return;
+
+      document.querySelectorAll('.form-step').forEach(el => el.classList.remove('active'));
+      document.getElementById('step-' + n).classList.add('active');
+
+      document.querySelectorAll('.step').forEach(el => {
+        const stepN = parseInt(el.dataset.step);
+        el.classList.remove('active', 'done');
+        if (stepN < n) el.classList.add('done');
+        if (stepN === n) el.classList.add('active');
+      });
+
+      passoAtual = n;
+
+      if (n === 4) montarRevisao();
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function avancar(passo) {
+      if (passo === 1) capturarPessoais();
+      if (passo === 2) capturarFisicos();
+      if (passo === 3) capturarObjetivos();
+      irParaPasso(passo + 1);
+    }
+
+    function voltar(passo) {
+      irParaPasso(passo - 1);
+    }
+
+    function cancelarOnboarding() {
+      if (confirm('Tem certeza que deseja cancelar? Suas informações não serão salvas.')) {
+        window.location.href = 'home.html';
+      }
+    }
+
+    /* ============================================================
+       VALIDAÇÕES
+    ============================================================ */
+    function validarPasso(passo) {
+      if (passo === 1) {
+        const nome = document.getElementById('nome').value.trim();
+        const telefone = document.getElementById('telefone').value.trim();
+        if (!nome || nome.length < 3) { toast('Informe seu nome completo', 'error'); return false; }
+        if (!telefone) { toast('Informe um telefone para contato', 'error'); return false; }
+        return true;
+      }
+
+      if (passo === 2) {
+        const peso = parseFloat(document.getElementById('peso').value);
+        const altura = parseFloat(document.getElementById('altura').value);
+        if (!peso || peso < 30 || peso > 250) { toast('Peso inválido (30 a 250 kg)', 'error'); return false; }
+        if (!altura || altura < 100 || altura > 250) { toast('Altura inválida (100 a 250 cm)', 'error'); return false; }
+        return true;
+      }
+
+      if (passo === 3) {
+        if (!dados.objetivos.objetivoPrincipal) { toast('Escolha seu objetivo principal', 'error'); return false; }
+        if (!dados.objetivos.nivel) { toast('Escolha seu nível de experiência', 'error'); return false; }
+        return true;
+      }
+
+      return true;
+    }
+
+    /* ============================================================
+       CHECAGENS EM TEMPO REAL (auto-habilitar botão)
+    ============================================================ */
+    function checarPasso1() {
+      const nome = document.getElementById('nome').value.trim();
+      const telefone = document.getElementById('telefone').value.trim();
+      const ok = nome.length >= 3 && telefone.length >= 14;
+      document.getElementById('btnStep1').disabled = !ok;
+    }
+
+    function checarPasso2() {
+      const peso = parseFloat(document.getElementById('peso').value);
+      const altura = parseFloat(document.getElementById('altura').value);
+      const ok = peso >= 30 && peso <= 250 && altura >= 100 && altura <= 250;
+      document.getElementById('btnStep2').disabled = !ok;
+    }
+
+    /* ============================================================
+       CAPTURA — PASSO 1
+    ============================================================ */
+    function capturarPessoais() {
+      dados.pessoais = {
+        nome: document.getElementById('nome').value.trim(),
+        cpf: document.getElementById('cpf').value.trim(),
+        dataNascimento: document.getElementById('nascimento').value || null,
+        telefone: document.getElementById('telefone').value.trim(),
+        endereco: {
+          cep: document.getElementById('cep').value.trim(),
+          rua: document.getElementById('rua').value.trim(),
+          numero: document.getElementById('numero').value.trim(),
+          bairro: document.getElementById('bairro').value.trim(),
+          complemento: document.getElementById('complemento').value.trim(),
+          cidade: document.getElementById('cidade').value.trim(),
+          estado: document.getElementById('estado').value.trim().toUpperCase()
+        },
+        contatoEmergencia: {
+          nome: document.getElementById('emergenciaNome').value.trim(),
+          telefone: document.getElementById('emergenciaTel').value.trim()
+        }
+      };
+    }
+
+    /* ============================================================
+       CAPTURA — PASSO 2
+    ============================================================ */
+    function capturarFisicos() {
+      const peso = parseFloat(document.getElementById('peso').value);
+      const altura = parseFloat(document.getElementById('altura').value);
+
+      dados.fisicos = {
+        peso,
+        altura,
+        tipoCorporal: dados.objetivos.tipoCorporal,
+        percentualGordura: parseFloat(document.getElementById('percentualGordura').value) || null,
+        medidas: {
+          peito: parseFloat(document.getElementById('medidaPeito').value) || null,
+          cintura: parseFloat(document.getElementById('medidaCintura').value) || null,
+          quadril: parseFloat(document.getElementById('medidaQuadril').value) || null,
+          braco: parseFloat(document.getElementById('medidaBraco').value) || null,
+          coxa: parseFloat(document.getElementById('medidaCoxa').value) || null
+        }
+      };
+    }
+
+    /* ============================================================
+       CAPTURA — PASSO 3
+    ============================================================ */
+    function capturarObjetivos() {
+      const restricoesTexto = document.getElementById('restricoes').value.trim();
+      const restricoes = restricoesTexto
+        ? restricoesTexto.split(/[,;\n]/).map(r => r.trim()).filter(Boolean)
+        : [];
+
+      dados.objetivos = {
+        principal: dados.objetivos.objetivoPrincipal,
+        nivel: dados.objetivos.nivel,
+        frequenciaSemanal: parseInt(document.getElementById('frequencia').value),
+        diasDisponiveis: dados.objetivos.diasDisponiveis,
+        tempoPorSessao: parseInt(document.getElementById('tempoSessao').value),
+        restricoes,
+        tipoCorporal: dados.objetivos.tipoCorporal
+      };
+    }
+
+    /* ============================================================
+       CHIPS
+    ============================================================ */
+    function selecionarChip(el, grupo) {
+      const parent = el.parentElement;
+      parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+
+      const valor = el.dataset.value;
+
+      if (grupo === 'tipoCorporal') dados.objetivos.tipoCorporal = valor;
+      if (grupo === 'objetivoPrincipal') {
+        dados.objetivos.objetivoPrincipal = valor;
+        checarPasso3();
+      }
+      if (grupo === 'nivel') {
+        dados.objetivos.nivel = valor;
+        checarPasso3();
+      }
+    }
+
+    function checarPasso3() {
+      const ok = !!dados.objetivos.objetivoPrincipal && !!dados.objetivos.nivel;
+      document.getElementById('btnStep3').disabled = !ok;
+    }
+
+    /* ============================================================
+       FREQUÊNCIA
+    ============================================================ */
+    function ajustarFrequencia(delta) {
+      const input = document.getElementById('frequencia');
+      let v = parseInt(input.value) + delta;
+      v = Math.max(2, Math.min(6, v));
+      input.value = v;
+      dados.objetivos.frequenciaSemanal = v;
+    }
+
+    /* ============================================================
+       DIAS
+    ============================================================ */
+    function toggleDia(el) {
+      const dia = el.dataset.dia;
+      el.classList.toggle('active');
+
+      const idx = dados.objetivos.diasDisponiveis.indexOf(dia);
+      if (idx >= 0) dados.objetivos.diasDisponiveis.splice(idx, 1);
+      else dados.objetivos.diasDisponiveis.push(dia);
+    }
+
+    /* ============================================================
+       IMC
+    ============================================================ */
+    function atualizarIMC() {
+      const peso = parseFloat(document.getElementById('peso').value);
+      const altura = parseFloat(document.getElementById('altura').value);
+
+      const wrapper = document.getElementById('imcWrapper');
+      const valor = document.getElementById('imcValor');
+      const badge = document.getElementById('imcBadge');
+
+      if (!peso || !altura || peso < 30 || altura < 100) {
+        wrapper.style.display = 'none';
+        return;
+      }
+
+      const alturaM = altura / 100;
+      const imc = peso / (alturaM * alturaM);
+      const imcFix = imc.toFixed(1);
+
+      valor.textContent = imcFix;
+
+      let classe = 'ok';
+      let texto = 'Normal';
+
+      if (imc < 18.5) { classe = 'under'; texto = 'Abaixo do peso'; }
+      else if (imc < 25) { classe = 'ok'; texto = 'Normal'; }
+      else if (imc < 30) { classe = 'over'; texto = 'Sobrepeso'; }
+      else { classe = 'obese'; texto = 'Obesidade'; }
+
+      badge.textContent = texto;
+      badge.className = 'imc-badge ' + classe;
+      wrapper.style.display = 'block';
+    }
+
+    /* ============================================================
+       CEP — Busca automática via ViaCEP
+    ============================================================ */
+    let cepTimeout = null;
+
+    function buscarCEP(el) {
+      const cep = el.value.replace(/\D/g, '');
+      const status = document.getElementById('cepStatus');
+
+      // Limpa timeout anterior
+      clearTimeout(cepTimeout);
+
+      // Só busca com 8 dígitos
+      if (cep.length !== 8) {
+        status.className = 'cep-status';
+        return;
+      }
+
+      status.textContent = '⏳ Buscando endereço...';
+      status.className = 'cep-status show loading';
+
+      cepTimeout = setTimeout(async () => {
+        try {
+          const { data } = await axios.get(`https://viacep.com.br/ws/${cep}/json/`);
+
+          if (data.erro) {
+            status.textContent = '❌ CEP não encontrado';
+            status.className = 'cep-status show error';
+            return;
+          }
+
+          // Preenche os campos
+          document.getElementById('rua').value = data.logradouro || '';
+          document.getElementById('bairro').value = data.bairro || '';
+          document.getElementById('cidade').value = data.localidade || '';
+          document.getElementById('estado').value = data.uf || '';
+
+          status.textContent = `✅ ${data.localidade}/${data.uf}`;
+          status.className = 'cep-status show success';
+
+          // Foca no número pra agilizar
+          setTimeout(() => {
+            document.getElementById('numero').focus();
+          }, 200);
+
+          // Auto-hide após 4s
+          setTimeout(() => {
+            status.className = 'cep-status';
+          }, 4000);
+
+        } catch (err) {
+          status.textContent = '❌ Erro ao buscar CEP';
+          status.className = 'cep-status show error';
+        }
+      }, 500);
+    }
+
+    /* ============================================================
+       REVISÃO
+    ============================================================ */
+    function montarRevisao() {
+      const p = dados.pessoais;
+      const f = dados.fisicos;
+      const o = dados.objetivos;
+
+      const imc = f.peso && f.altura
+        ? (f.peso / Math.pow(f.altura / 100, 2)).toFixed(1)
+        : '—';
+
+      document.getElementById('reviewPessoais').innerHTML = `
+        ${item('Nome', p.nome || '—')}
+        ${p.cpf ? item('CPF', p.cpf) : ''}
+        ${p.dataNascimento ? item('Nascimento', formatarDataBR(p.dataNascimento)) : ''}
+        ${item('Telefone', p.telefone || '—')}
+        ${p.endereco?.cidade ? item('Cidade', `${p.endereco.cidade}/${p.endereco.estado}`) : ''}
+      `;
+
+      document.getElementById('reviewFisicos').innerHTML = `
+        ${item('Peso', f.peso ? f.peso + ' kg' : '—')}
+        ${item('Altura', f.altura ? f.altura + ' cm' : '—')}
+        ${item('IMC', imc)}
+        ${f.tipoCorporal ? item('Tipo corporal', capitalize(f.tipoCorporal.replace('_', ' '))) : ''}
+        ${f.percentualGordura ? item('% Gordura', f.percentualGordura + '%') : ''}
+      `;
+
+      const dias = o.diasDisponiveis.length > 0
+        ? o.diasDisponiveis.map(d => capitalize(d)).join(', ')
+        : 'Distribuição automática';
+
+      document.getElementById('reviewObjetivos').innerHTML = `
+        ${item('Objetivo', capitalize(o.principal || '—'))}
+        ${item('Nível', capitalize(o.nivel || '—'))}
+        ${item('Frequência', o.frequenciaSemanal + 'x por semana')}
+        ${item('Dias', dias)}
+        ${item('Tempo por sessão', o.tempoPorSessao + ' min')}
+        ${o.restricoes.length ? item('Restrições', o.restricoes.join(', ')) : ''}
+      `;
+    }
+
+    function item(lbl, val) {
+      return `<div class="review-item"><span class="lbl">${escapeHtml(lbl)}</span><span class="val">${escapeHtml(String(val))}</span></div>`;
+    }
+
+    /* ============================================================
+       FINALIZAR
+    ============================================================ */
+    async function finalizar() {
+      const btn = document.getElementById('btnFinalizar');
+      btn.disabled = true;
+
+      mostrarLoading('💾', 'Salvando seu perfil...', 'Registrando seus dados na academia');
+
+      try {
+        // 1. Salva perfil completo
+        await BD.salvarPerfilCompleto(usuarioAtual.id, {
+          dadosPessoais: {
+            ...dados.pessoais,
+            nome: dados.pessoais.nome
+          },
+          dadosFisicos: dados.fisicos,
+          objetivos: {
+            ...dados.objetivos,
+            principal: dados.objetivos.principal
+          }
+        });
+
+        atualizarLoading(30, '🎯', 'Analisando seus objetivos...', 'Cruzando dados com o motor de geração');
+
+        await sleep(600);
+
+        // 2. Gera o treino
+        atualizarLoading(65, '🏋️', 'Gerando seu treino...', 'Montando sessões personalizadas');
+
+        await BD.gerarTreino(usuarioAtual.id, 'Primeiro cadastro');
+
+        atualizarLoading(95, '✅', 'Tudo pronto!', 'Preparando sua home...');
+
+        // 3. Atualiza cache com dados frescos
+        const freshUser = await BD.getUsuario(usuarioAtual.id);
+        localStorage.setItem('triad_usuario', JSON.stringify(freshUser));
+
+        await sleep(700);
+
+        atualizarLoading(100, '🚀', 'Bem-vindo à Triad!', 'Redirecionando...');
+
+        setTimeout(() => {
+          window.location.href = 'home.html';
+        }, 800);
+
+      } catch (err) {
+        esconderLoading();
+        btn.disabled = false;
+        const msg = err.response?.data?.erro || err.message || 'Erro ao salvar. Tente novamente.';
+        toast('❌ ' + msg, 'error', 4500);
+      }
+    }
+
+    /* ============================================================
+       LOADING
+    ============================================================ */
+    function mostrarLoading(icon, titulo, msg) {
+      document.getElementById('loadingIcon').textContent = icon;
+      document.getElementById('loadingTitle').textContent = titulo;
+      document.getElementById('loadingMsg').textContent = msg;
+      document.getElementById('loadingBar').style.width = '10%';
+      document.getElementById('loadingOverlay').classList.add('show');
+    }
+
+    function atualizarLoading(pct, icon, titulo, msg) {
+      document.getElementById('loadingIcon').textContent = icon;
+      document.getElementById('loadingTitle').textContent = titulo;
+      document.getElementById('loadingMsg').textContent = msg;
+      document.getElementById('loadingBar').style.width = pct + '%';
+    }
+
+    function esconderLoading() {
+      document.getElementById('loadingOverlay').classList.remove('show');
+    }
+
+    /* ============================================================
+       ENTER
+    ============================================================ */
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const active = document.querySelector('.form-step.active');
+      if (!active) return;
+      if (active.id === 'step-4') return;
+      const btn = active.querySelector('.btn-primary:not(:disabled)');
+      if (btn) btn.click();
+    });
+  </script>
+</body>
+</html>

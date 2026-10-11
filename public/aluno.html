@@ -1,0 +1,2144 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Triad Academia | Minha Central</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    /* ============================================================
+       RESET / VARIÁVEIS
+    ============================================================ */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root,
+    [data-theme="light"] {
+      --bg: #f7faf8;
+      --bg-sidebar: #ffffff;
+      --card: #ffffff;
+      --card-2: #f4f9f5;
+      --border: #eaf1ec;
+      --border-2: #dfe9e2;
+      --text: #0f2417;
+      --text-2: #2b4436;
+      --muted: #7a9184;
+      --muted-2: #a8bfb2;
+      --primary: #00b85c;
+      --primary-2: #00e676;
+      --primary-deep: #008f47;
+      --primary-soft: #e6f9ee;
+      --primary-soft-2: #d1f4e0;
+
+      --c-green-bg: #e6f9ee;   --c-green-fg: #00a352;
+      --c-blue-bg:  #e8f1ff;   --c-blue-fg:  #2563eb;
+      --c-purple-bg:#f1ebff;   --c-purple-fg:#7c3aed;
+      --c-pink-bg:  #ffe9f0;   --c-pink-fg:  #db2777;
+      --c-orange-bg:#fff1e3;   --c-orange-fg:#ea580c;
+      --c-yellow-bg:#fff8e1;   --c-yellow-fg:#ca8a04;
+      --c-red-bg:   #ffe8e8;   --c-red-fg:   #dc2626;
+
+      --shadow-xs: 0 1px 2px rgba(15, 36, 23, 0.04);
+      --shadow-sm: 0 1px 3px rgba(15, 36, 23, 0.05), 0 1px 2px rgba(15, 36, 23, 0.03);
+      --shadow-md: 0 4px 16px rgba(15, 36, 23, 0.06);
+      --shadow-lg: 0 12px 40px rgba(15, 36, 23, 0.08);
+      --shadow-primary: 0 8px 24px rgba(0, 184, 92, 0.25);
+    }
+
+    [data-theme="dark"] {
+      --bg: #071410;
+      --bg-sidebar: #0a1a12;
+      --card: #0e2419;
+      --card-2: #122e21;
+      --border: #1a3d29;
+      --border-2: #234c34;
+      --text: #e8f7ee;
+      --text-2: #b8d9c5;
+      --muted: #7a9a86;
+      --muted-2: #4f7060;
+      --primary: #00e676;
+      --primary-2: #4dffb0;
+      --primary-deep: #00b85c;
+      --primary-soft: #0d3320;
+      --primary-soft-2: #114028;
+
+      --c-green-bg:  #0d3320;  --c-green-fg:  #4dffb0;
+      --c-blue-bg:   #0d213a;  --c-blue-fg:   #60a5fa;
+      --c-purple-bg: #1e1238;  --c-purple-fg: #a78bfa;
+      --c-pink-bg:   #3a0d21;  --c-pink-fg:   #f472b6;
+      --c-orange-bg: #3a250d;  --c-orange-fg: #fbbf24;
+      --c-yellow-bg: #3a340d;  --c-yellow-fg: #facc15;
+      --c-red-bg:    #3a0d0d;  --c-red-fg:    #f87171;
+
+      --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+      --shadow-primary: 0 8px 24px rgba(0, 230, 118, 0.3);
+    }
+
+    html, body { min-height: 100vh; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.4s ease, color 0.4s ease;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ============================================================
+       LAYOUT
+    ============================================================ */
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ============================================================
+       SIDEBAR
+    ============================================================ */
+    .sidebar {
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 10px 28px;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-primary);
+      flex-shrink: 0;
+    }
+
+    .brand-logo svg { width: 22px; height: 22px; }
+
+    .brand-text h1 {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .brand-text p {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 1px;
+    }
+
+    .nav-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .nav-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--muted-2);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 14px 12px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      color: var(--text-2);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s;
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      text-align: left;
+      width: 100%;
+      letter-spacing: -0.1px;
+      position: relative;
+    }
+
+    .nav-item:hover { background: var(--card-2); color: var(--text); }
+
+    .nav-item.active {
+      background: var(--primary-soft);
+      color: var(--primary-deep);
+      font-weight: 700;
+    }
+
+    [data-theme="dark"] .nav-item.active { color: var(--primary-2); }
+
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 20px;
+      background: var(--primary);
+      border-radius: 0 3px 3px 0;
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .sidebar-profile {
+      margin-top: auto;
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--card-2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: 0.15s;
+      border: 1px solid transparent;
+    }
+
+    .sidebar-profile:hover {
+      border-color: var(--border-2);
+      background: var(--card);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .profile-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: var(--shadow-primary);
+    }
+
+    .profile-info { flex: 1; min-width: 0; }
+
+    .profile-info .name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: -0.2px;
+    }
+
+    .profile-info .status {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 1px;
+    }
+
+    .profile-info .status .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 6px var(--primary);
+    }
+
+    /* ============================================================
+       MAIN
+    ============================================================ */
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 26px 40px 8px;
+      gap: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      color: var(--text);
+    }
+
+    .header-left p {
+      font-size: 13.5px;
+      color: var(--muted);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.15s;
+      font-size: 17px;
+      box-shadow: var(--shadow-xs);
+    }
+
+    .icon-btn:hover {
+      border-color: var(--border-2);
+      box-shadow: var(--shadow-sm);
+      transform: translateY(-1px);
+    }
+
+    .menu-toggle {
+      display: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    /* ============================================================
+       TABS
+    ============================================================ */
+    .tabs {
+      display: flex;
+      gap: 6px;
+      padding: 18px 40px 0;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .tabs::-webkit-scrollbar { display: none; }
+
+    .tab {
+      padding: 12px 18px;
+      border-radius: 12px 12px 0 0;
+      background: transparent;
+      border: none;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      transition: 0.15s;
+      white-space: nowrap;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: -0.1px;
+    }
+
+    .tab:hover { color: var(--text); background: var(--card-2); }
+
+    .tab.active {
+      color: var(--primary-deep);
+      background: var(--card);
+    }
+
+    [data-theme="dark"] .tab.active { color: var(--primary-2); }
+
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 12px;
+      right: 12px;
+      height: 2px;
+      background: var(--primary);
+      border-radius: 2px;
+    }
+
+    .tab-emoji { font-size: 15px; }
+
+    /* ============================================================
+       CONTEÚDO
+    ============================================================ */
+    .content {
+      padding: 28px 40px 60px;
+      max-width: 1100px;
+      width: 100%;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: fadeIn 0.25s ease; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ============================================================
+       CARDS
+    ============================================================ */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+
+    .card-title-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .ic-green  { background: var(--c-green-bg);  color: var(--c-green-fg); }
+    .ic-blue   { background: var(--c-blue-bg);   color: var(--c-blue-fg); }
+    .ic-purple { background: var(--c-purple-bg); color: var(--c-purple-fg); }
+    .ic-pink   { background: var(--c-pink-bg);   color: var(--c-pink-fg); }
+    .ic-orange { background: var(--c-orange-bg); color: var(--c-orange-fg); }
+    .ic-yellow { background: var(--c-yellow-bg); color: var(--c-yellow-fg); }
+    .ic-red    { background: var(--c-red-bg);    color: var(--c-red-fg); }
+
+    /* ============================================================
+       PERFIL
+    ============================================================ */
+    .perfil-hero {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 26px;
+      background: linear-gradient(135deg, var(--card) 0%, var(--primary-soft) 200%);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .perfil-hero::before {
+      content: '';
+      position: absolute;
+      top: -50px;
+      right: -50px;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, var(--primary-soft-2), transparent 70%);
+      border-radius: 50%;
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    [data-theme="dark"] .perfil-hero::before {
+      background: radial-gradient(circle, rgba(0, 230, 118, 0.15), transparent 70%);
+    }
+
+    .perfil-hero > * { position: relative; z-index: 2; }
+
+    .perfil-avatar {
+      width: 88px;
+      height: 88px;
+      border-radius: 26px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 12px 32px var(--shadow-primary);
+    }
+
+    .perfil-info h2 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .perfil-info p {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+
+    .perfil-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 11px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: -0.1px;
+    }
+
+    .tag-green  { background: var(--c-green-bg);  color: var(--c-green-fg); }
+    .tag-blue   { background: var(--c-blue-bg);   color: var(--c-blue-fg); }
+    .tag-purple { background: var(--c-purple-bg); color: var(--c-purple-fg); }
+    .tag-orange { background: var(--c-orange-bg); color: var(--c-orange-fg); }
+    .tag-gray   { background: var(--card-2); color: var(--muted); }
+
+    /* Info grid */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .info-item {
+      padding: 14px 16px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      transition: 0.15s;
+    }
+
+    .info-item:hover {
+      border-color: var(--border-2);
+      background: var(--card);
+    }
+
+    .info-item .lbl {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+
+    .info-item .val {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.3px;
+      word-break: break-word;
+    }
+
+    .info-item .val.vazio {
+      color: var(--muted-2);
+      font-weight: 600;
+      font-size: 13.5px;
+    }
+
+    /* ============================================================
+       META SEMANAL
+    ============================================================ */
+    .meta-card {
+      background: linear-gradient(135deg, var(--card) 0%, var(--primary-soft) 200%);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 26px;
+      margin-bottom: 16px;
+    }
+
+    .meta-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .meta-header h3 {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+
+    .meta-header p {
+      font-size: 12.5px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 3px;
+    }
+
+    .meta-count-big {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: var(--primary-deep);
+    }
+
+    [data-theme="dark"] .meta-count-big { color: var(--primary-2); }
+
+    .meta-count-big small {
+      font-size: 16px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .progress {
+      width: 100%;
+      height: 10px;
+      background: var(--card-2);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--primary-2));
+      border-radius: 8px;
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 10px rgba(0, 184, 92, 0.4);
+    }
+
+    /* ============================================================
+       BOTÕES
+    ============================================================ */
+    .btn {
+      padding: 12px 20px;
+      border-radius: 12px;
+      border: none;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: 0.15s;
+      letter-spacing: -0.2px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      color: #fff;
+      box-shadow: var(--shadow-primary);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 32px rgba(0, 184, 92, 0.35);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-ghost {
+      background: var(--card-2);
+      color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      background: var(--card);
+      border-color: var(--border-2);
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: var(--c-red-bg);
+      color: var(--c-red-fg);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+    }
+
+    .btn-danger:hover {
+      background: var(--c-red-fg);
+      color: #fff;
+    }
+
+    .btn-warning {
+      background: var(--c-orange-bg);
+      color: var(--c-orange-fg);
+      border: 1px solid rgba(234, 88, 12, 0.2);
+    }
+
+    .btn-warning:hover {
+      background: var(--c-orange-fg);
+      color: #fff;
+    }
+
+    /* ============================================================
+       EVOLUÇÃO (gráfico)
+    ============================================================ */
+    .evolution-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .evolution-pct {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.9px;
+      color: var(--primary-deep);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    [data-theme="dark"] .evolution-pct { color: var(--primary-2); }
+
+    .evolution-pct .arrow { font-size: 20px; }
+
+    .evolution-pct-text {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 3px;
+    }
+
+    .chart {
+      width: 100%;
+      height: 180px;
+      position: relative;
+    }
+
+    .chart svg { width: 100%; height: 100%; display: block; }
+
+    .chart-line {
+      fill: none;
+      stroke: var(--primary);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 4px 8px rgba(0, 184, 92, 0.3));
+      stroke-dasharray: 600;
+      stroke-dashoffset: 600;
+      animation: drawLine 1.6s ease-out forwards 0.3s;
+    }
+
+    @keyframes drawLine {
+      to { stroke-dashoffset: 0; }
+    }
+
+    .chart-area {
+      fill: url(#areaGradient);
+      opacity: 0;
+      animation: fadeIn 0.8s ease-out forwards 1.2s;
+    }
+
+    .chart-grid {
+      stroke: var(--border);
+      stroke-width: 1;
+      stroke-dasharray: 3,3;
+    }
+
+    .chart-label {
+      font-size: 10.5px;
+      fill: var(--muted);
+      font-weight: 600;
+    }
+
+    /* ============================================================
+       CHECK-INS (lista)
+    ============================================================ */
+    .checkin-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .checkin-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      transition: 0.15s;
+    }
+
+    .checkin-item:hover {
+      background: var(--card);
+      border-color: var(--border-2);
+    }
+
+    .checkin-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      flex-shrink: 0;
+    }
+
+    .checkin-info { flex: 1; min-width: 0; }
+
+    .checkin-info .titulo {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+
+    .checkin-info .sub {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 3px;
+    }
+
+    .checkin-humor {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    /* ============================================================
+       ESTADO VAZIO
+    ============================================================ */
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    .empty .emoji {
+      font-size: 44px;
+      display: block;
+      margin-bottom: 12px;
+      opacity: 0.7;
+    }
+
+    /* ============================================================
+       MODAL
+    ============================================================ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 36, 23, 0.5);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .modal-overlay.show { display: flex; }
+
+    .modal {
+      background: var(--card);
+      border-radius: 22px;
+      padding: 26px;
+      width: 100%;
+      max-width: 460px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
+      animation: modalIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      border: 1px solid var(--border);
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.15s;
+    }
+
+    .modal-close:hover {
+      background: var(--c-red-bg);
+      color: var(--c-red-fg);
+      border-color: transparent;
+    }
+
+    .modal h3 {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.4px;
+      margin-bottom: 6px;
+    }
+
+    .modal .modal-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .modal-actions .btn { flex: 1; }
+
+    /* ============================================================
+       CAMPOS
+    ============================================================ */
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 500;
+      outline: none;
+      transition: 0.15s;
+      resize: vertical;
+    }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--primary);
+      background: var(--card);
+      box-shadow: 0 0 0 4px var(--primary-soft);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* ============================================================
+       AVISO DE MUDANÇA
+    ============================================================ */
+    .aviso-treino {
+      background: var(--c-orange-bg);
+      border: 1px solid rgba(234, 88, 12, 0.2);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .aviso-treino .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(234, 88, 12, 0.15);
+      color: var(--c-orange-fg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .aviso-treino .txt { flex: 1; min-width: 0; }
+
+    .aviso-treino .txt h4 {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: var(--c-orange-fg);
+      margin-bottom: 4px;
+      letter-spacing: -0.2px;
+    }
+
+    .aviso-treino .txt p {
+      font-size: 12.5px;
+      color: var(--c-orange-fg);
+      opacity: 0.9;
+      font-weight: 500;
+      line-height: 1.45;
+      margin-bottom: 12px;
+    }
+
+    .aviso-treino .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* ============================================================
+       TOAST
+    ============================================================ */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--text);
+      color: var(--bg);
+      border-radius: 14px;
+      padding: 13px 22px;
+      font-size: 13.5px;
+      font-weight: 700;
+      z-index: 1100;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: var(--shadow-lg);
+      max-width: 90vw;
+      letter-spacing: -0.2px;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ============================================================
+       RESPONSIVO
+    ============================================================ */
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+
+      .sidebar {
+        display: none;
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        width: 260px;
+        z-index: 200;
+        box-shadow: var(--shadow-lg);
+      }
+
+      .sidebar.open { display: flex; }
+
+      .menu-toggle { display: flex; }
+
+      .header { padding: 20px 20px 8px; }
+      .tabs { padding: 14px 20px 0; }
+      .content { padding: 20px 20px 60px; }
+    }
+
+    @media (max-width: 560px) {
+      .info-grid { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr; }
+      .perfil-hero { flex-direction: column; text-align: center; }
+      .perfil-info h2 { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 2L4.5 13.5H11L10 22L19.5 9.5H12.5L13 2Z" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Triad Academia</h1>
+          <p>Plataforma de evolução</p>
+        </div>
+      </div>
+
+      <nav class="nav-section">
+        <div class="nav-label">Principal</div>
+        <button class="nav-item" onclick="irPara('home.html')">
+          <span class="nav-icon">🏠</span>
+          Início
+        </button>
+        <button class="nav-item" onclick="irPara('treino.html')">
+          <span class="nav-icon">🏋️</span>
+          Meu treino
+        </button>
+        <button class="nav-item active">
+          <span class="nav-icon">👤</span>
+          Minha central
+        </button>
+
+        <div class="nav-label">Conta</div>
+        <button class="nav-item" onclick="abrirModalPerfil()">
+          <span class="nav-icon">⚙️</span>
+          Configurações
+        </button>
+      </nav>
+
+      <div class="sidebar-profile" onclick="irPara('home.html')">
+        <div class="profile-avatar" id="sideAvatar">?</div>
+        <div class="profile-info">
+          <div class="name" id="sideNome">Carregando...</div>
+          <div class="status" id="sideStatus">
+            <span class="dot"></span>
+            <span>Ativo</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <header class="header">
+        <div class="header-left" style="display:flex;align-items:center;gap:14px;">
+          <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+          <div>
+            <h1 id="pageTitle">Minha Central</h1>
+            <p>Gerencie seu perfil, metas e evolução</p>
+          </div>
+        </div>
+        <div class="header-right">
+          <button class="icon-btn" onclick="toggleTheme()" id="themeToggle" title="Tema">
+            <span id="themeIcon">🌙</span>
+          </button>
+          <button class="icon-btn" onclick="irPara('home.html')" title="Início">
+            🏠
+          </button>
+        </div>
+      </header>
+
+      <!-- TABS -->
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="perfil" onclick="mudarTab('perfil')">
+          <span class="tab-emoji">👤</span> Perfil
+        </button>
+        <button class="tab" data-tab="metas" onclick="mudarTab('metas')">
+          <span class="tab-emoji">🎯</span> Metas
+        </button>
+        <button class="tab" data-tab="evolucao" onclick="mudarTab('evolucao')">
+          <span class="tab-emoji">📈</span> Evolução
+        </button>
+        <button class="tab" data-tab="checkins" onclick="mudarTab('checkins')">
+          <span class="tab-emoji">✅</span> Check-ins
+        </button>
+      </div>
+
+      <!-- CONTEÚDO -->
+      <div class="content">
+
+        <!-- ===================== PERFIL ===================== -->
+        <div class="tab-panel active" id="panel-perfil">
+          <div class="perfil-hero">
+            <div class="perfil-avatar" id="perfilAvatar">?</div>
+            <div class="perfil-info">
+              <h2 id="perfilNome">Carregando...</h2>
+              <p id="perfilEmail">—</p>
+              <div class="perfil-tags" id="perfilTags"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-green">👤</div>
+                Dados pessoais
+              </div>
+              <button class="btn btn-ghost" onclick="abrirModalEditarPessoais()">
+                ✏️ Editar
+              </button>
+            </div>
+            <div class="info-grid" id="infoPessoais"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-blue">📏</div>
+                Dados físicos
+              </div>
+              <button class="btn btn-ghost" onclick="abrirModalEditarFisicos()">
+                ✏️ Atualizar
+              </button>
+            </div>
+            <div class="info-grid" id="infoFisicos"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-purple">🎯</div>
+                Objetivos
+              </div>
+              <button class="btn btn-ghost" onclick="abrirModalEditarObjetivos()">
+                ✏️ Editar
+              </button>
+            </div>
+            <div class="info-grid" id="infoObjetivos"></div>
+          </div>
+        </div>
+
+        <!-- ===================== METAS ===================== -->
+        <div class="tab-panel" id="panel-metas">
+          <div class="meta-card">
+            <div class="meta-header">
+              <div>
+                <h3>Meta semanal</h3>
+                <p id="metaSub">Progresso da semana atual</p>
+              </div>
+              <div class="meta-count-big" id="metaCountBig">
+                0<small>/4</small>
+              </div>
+            </div>
+            <div class="progress">
+              <div class="progress-bar" id="metaProgress" style="width:0%"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);font-weight:600;margin-top:4px;">
+              <span id="metaHint">—</span>
+              <span id="metaPct">0%</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-yellow">⚙️</div>
+                Ajustar meta
+              </div>
+            </div>
+            <p style="font-size:13px;color:var(--muted);font-weight:500;line-height:1.5;margin-bottom:16px;">
+              Defina quantas vezes você quer treinar por semana. Você pode alterar essa meta a qualquer momento.
+            </p>
+            <div class="field">
+              <label>Treinos por semana</label>
+              <select id="selectMetaSemanal">
+                <option value="2">2 vezes por semana</option>
+                <option value="3">3 vezes por semana</option>
+                <option value="4">4 vezes por semana</option>
+                <option value="5">5 vezes por semana</option>
+                <option value="6">6 vezes por semana</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="salvarMeta()">
+              💾 Salvar meta
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-purple">🔄</div>
+                Recalcular treino
+              </div>
+            </div>
+            <p style="font-size:13px;color:var(--muted);font-weight:500;line-height:1.5;margin-bottom:16px;">
+              Gerar um novo plano baseado nos seus objetivos atuais. O treino anterior ficará salvo no histórico.
+            </p>
+            <button class="btn btn-warning" onclick="abrirModalRecalcular()">
+              ✨ Gerar novo treino
+            </button>
+          </div>
+        </div>
+
+        <!-- ===================== EVOLUÇÃO ===================== -->
+        <div class="tab-panel" id="panel-evolucao">
+          <div class="card">
+            <div class="evolution-header">
+              <div>
+                <div class="evolution-pct">
+                  <span class="arrow" id="evoArrow">→</span>
+                  <span id="evoPct">0%</span>
+                </div>
+                <div class="evolution-pct-text" id="evoText">Sem dados suficientes ainda.</div>
+              </div>
+              <div style="font-size:11.5px;color:var(--muted);font-weight:600;text-align:right;">
+                Últimas 4 semanas
+              </div>
+            </div>
+            <div class="chart">
+              <svg viewBox="0 0 400 180" preserveAspectRatio="none" id="chartEvolucao">
+                <defs>
+                  <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#00b85c" stop-opacity="0.3"/>
+                    <stop offset="100%" stop-color="#00b85c" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <line class="chart-grid" x1="0" y1="40" x2="400" y2="40"/>
+                <line class="chart-grid" x1="0" y1="80" x2="400" y2="80"/>
+                <line class="chart-grid" x1="0" y1="120" x2="400" y2="120"/>
+                <line class="chart-grid" x1="0" y1="160" x2="400" y2="160"/>
+                <path class="chart-area" id="chartArea" d=""/>
+                <path class="chart-line" id="chartLine" d=""/>
+              </svg>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
+              <span>Semana 1</span>
+              <span>Semana 2</span>
+              <span>Semana 3</span>
+              <span>Semana 4</span>
+            </div>
+          </div>
+
+          <div class="info-grid" style="grid-template-columns:repeat(auto-fill, minmax(200px,1fr));">
+            <div class="info-item">
+              <div class="lbl">Total de treinos</div>
+              <div class="val" id="statTotalTreinos">0</div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">Sequência atual</div>
+              <div class="val" id="statSequencia">0 dias</div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">Esta semana</div>
+              <div class="val" id="statSemana">0</div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">Últimos 30 dias</div>
+              <div class="val" id="statMes">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================== CHECK-INS ===================== -->
+        <div class="tab-panel" id="panel-checkins">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon ic-green">✅</div>
+                Histórico de check-ins
+              </div>
+              <span style="font-size:12.5px;color:var(--muted);font-weight:600;" id="checkinsTotal">0 registros</span>
+            </div>
+            <div class="checkin-list" id="listaCheckins">
+              <div class="empty">
+                <span class="emoji">📭</span>
+                Nenhum check-in registrado ainda
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay" onclick="fecharModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ============================================================
+       API
+    ============================================================ */
+    const API = axios.create({
+      baseURL: window.location.origin + '/api',
+      timeout: 10000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    /* ============================================================
+       ESTADO
+    ============================================================ */
+    let usuarioAtual = null;
+    let stats = null;
+    let checkins = [];
+    let treinos = [];
+
+    /* ============================================================
+       TEMA
+    ============================================================ */
+    function toggleTheme() {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', next);
+      document.getElementById('themeIcon').textContent = next === 'light' ? '🌙' : '☀️';
+      localStorage.setItem('triad_tema', next);
+    }
+
+    (function initTheme() {
+      const saved = localStorage.getItem('triad_tema') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      document.getElementById('themeIcon').textContent = saved === 'light' ? '🌙' : '☀️';
+    })();
+
+    /* ============================================================
+       INIT
+    ============================================================ */
+    (async function init() {
+      const salvo = localStorage.getItem('triad_usuario');
+      if (!salvo) { window.location.href = 'index.html'; return; }
+
+      let usuarioId;
+      try { usuarioId = JSON.parse(salvo).id; }
+      catch { window.location.href = 'index.html'; return; }
+
+      try {
+        const { data } = await API.get('/usuarios/' + usuarioId);
+        usuarioAtual = data.usuario;
+        localStorage.setItem('triad_usuario', JSON.stringify(usuarioAtual));
+      } catch {
+        try { usuarioAtual = JSON.parse(salvo); }
+        catch { window.location.href = 'index.html'; return; }
+      }
+
+      // Verifica perfil
+      if (usuarioAtual.perfil === 'aluno' && !(usuarioAtual.dadosFisicos && usuarioAtual.objetivos)) {
+        window.location.href = 'onboarding.html';
+        return;
+      }
+
+      montarSidebar();
+      renderizarPerfil();
+
+      // Carrega dados em paralelo
+      await Promise.all([
+        carregarStats(),
+        carregarCheckins(),
+        carregarTreinos()
+      ]);
+
+      renderizarMetas();
+      renderizarEvolucao();
+      renderizarCheckins();
+
+      // Suporte a hash da URL (#evolucao, #metas, etc)
+      const hash = window.location.hash.replace('#', '');
+      if (['perfil', 'metas', 'evolucao', 'checkins'].includes(hash)) {
+        mudarTab(hash);
+      }
+    })();
+
+    /* ============================================================
+       SIDEBAR
+    ============================================================ */
+    function montarSidebar() {
+      const nome = usuarioAtual.dadosPessoais?.nome || usuarioAtual.nome || 'Aluno';
+      const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+      document.getElementById('sideAvatar').textContent = iniciais;
+      document.getElementById('sideNome').textContent = nome;
+
+      const status = document.getElementById('sideStatus');
+      if (usuarioAtual.status === 'pendente') {
+        status.querySelector('span:last-child').textContent = 'Pendente';
+      } else {
+        status.querySelector('span:last-child').textContent = 'Ativo';
+      }
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    /* ============================================================
+       TABS
+    ============================================================ */
+    function mudarTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+      });
+      document.querySelectorAll('.tab-panel').forEach(p => {
+        p.classList.toggle('active', p.id === 'panel-' + tab);
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ============================================================
+       PERFIL
+    ============================================================ */
+    function renderizarPerfil() {
+      const dp = usuarioAtual.dadosPessoais || {};
+      const df = usuarioAtual.dadosFisicos || {};
+      const ob = usuarioAtual.objetivos || {};
+
+      const nome = dp.nome || usuarioAtual.nome || 'Aluno';
+      const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+      // Hero
+      document.getElementById('perfilAvatar').textContent = iniciais;
+      document.getElementById('perfilNome').textContent = nome;
+      document.getElementById('perfilEmail').textContent = usuarioAtual.email || '—';
+
+      const tags = [];
+      if (ob.principal) tags.push(`<span class="tag tag-green">🎯 ${capitalize(ob.principal)}</span>`);
+      if (ob.nivel) tags.push(`<span class="tag tag-blue">📊 ${capitalize(ob.nivel)}</span>`);
+      if (usuarioAtual.status === 'ativo') tags.push(`<span class="tag tag-green">✅ Ativo</span>`);
+      else tags.push(`<span class="tag tag-orange">⏳ Pendente</span>`);
+      document.getElementById('perfilTags').innerHTML = tags.join('');
+
+      // Pessoais
+      document.getElementById('infoPessoais').innerHTML = `
+        ${itemInfo('Nome completo', dp.nome)}
+        ${itemInfo('CPF', dp.cpf)}
+        ${itemInfo('Data de nascimento', dp.dataNascimento ? formatarDataBR(dp.dataNascimento) : null)}
+        ${itemInfo('Telefone', dp.telefone)}
+        ${itemInfo('Cidade', dp.endereco?.cidade ? `${dp.endereco.cidade}/${dp.endereco.estado}` : null)}
+        ${itemInfo('Contato emergência', dp.contatoEmergencia?.nome ? `${dp.contatoEmergencia.nome} · ${dp.contatoEmergencia.telefone}` : null)}
+      `;
+
+      // Físicos
+      document.getElementById('infoFisicos').innerHTML = `
+        ${itemInfo('Peso', df.peso ? df.peso + ' kg' : null)}
+        ${itemInfo('Altura', df.altura ? df.altura + ' cm' : null)}
+        ${itemInfo('IMC', df.imc ? df.imc + ` (${classificarIMC(df.imc)})` : null)}
+        ${itemInfo('Tipo corporal', df.tipoCorporal ? capitalize(df.tipoCorporal.replace('_', ' ')) : null)}
+        ${itemInfo('% Gordura', df.percentualGordura ? df.percentualGordura + '%' : null)}
+        ${itemInfo('Medidas', formatarMedidas(df.medidas))}
+      `;
+
+      // Objetivos
+      const dias = ob.diasDisponiveis?.length
+        ? ob.diasDisponiveis.map(d => capitalize(d)).join(', ')
+        : 'Automático';
+
+      document.getElementById('infoObjetivos').innerHTML = `
+        ${itemInfo('Objetivo principal', ob.principal ? capitalize(ob.principal) : null)}
+        ${itemInfo('Nível', ob.nivel ? capitalize(ob.nivel) : null)}
+        ${itemInfo('Frequência', ob.frequenciaSemanal ? ob.frequenciaSemanal + 'x por semana' : null)}
+        ${itemInfo('Dias disponíveis', dias)}
+        ${itemInfo('Tempo por sessão', ob.tempoPorSessao ? ob.tempoPorSessao + ' min' : null)}
+        ${itemInfo('Restrições', ob.restricoes?.length ? ob.restricoes.join(', ') : null)}
+      `;
+    }
+
+    function itemInfo(label, valor) {
+      if (valor === null || valor === undefined || valor === '') {
+        return `
+          <div class="info-item">
+            <div class="lbl">${escapeHtml(label)}</div>
+            <div class="val vazio">Não informado</div>
+          </div>`;
+      }
+      return `
+        <div class="info-item">
+          <div class="lbl">${escapeHtml(label)}</div>
+          <div class="val">${escapeHtml(String(valor))}</div>
+        </div>`;
+    }
+
+    function classificarIMC(imc) {
+      if (imc < 18.5) return 'abaixo';
+      if (imc < 25) return 'normal';
+      if (imc < 30) return 'sobrepeso';
+      return 'obesidade';
+    }
+
+    function formatarMedidas(m) {
+      if (!m) return null;
+      const partes = [];
+      if (m.peito) partes.push(`Peito ${m.peito}cm`);
+      if (m.cintura) partes.push(`Cintura ${m.cintura}cm`);
+      if (m.quadril) partes.push(`Quadril ${m.quadril}cm`);
+      if (m.braco) partes.push(`Braço ${m.braco}cm`);
+      if (m.coxa) partes.push(`Coxa ${m.coxa}cm`);
+      return partes.length ? partes.join(' · ') : null;
+    }
+
+    function formatarDataBR(iso) {
+      if (!iso) return '—';
+      const [a, m, d] = iso.split('-');
+      return `${d}/${m}/${a}`;
+    }
+
+    /* ============================================================
+       METAS
+    ============================================================ */
+    async function carregarStats() {
+      try {
+        const { data } = await API.get('/usuarios/' + usuarioAtual.id + '/stats');
+        stats = data.stats;
+      } catch { stats = null; }
+    }
+
+    function renderizarMetas() {
+      if (!stats) return;
+
+      const meta = stats.metaSemanal || 4;
+      const feitos = stats.treinosSemana;
+      const pct = Math.min(100, Math.round((feitos / meta) * 100));
+
+      document.getElementById('metaCountBig').innerHTML = `${feitos}<small>/${meta}</small>`;
+      document.getElementById('metaProgress').style.width = pct + '%';
+      document.getElementById('metaPct').textContent = pct + '%';
+
+      const faltam = Math.max(0, meta - feitos);
+      const hint = document.getElementById('metaHint');
+      if (faltam === 0) hint.innerHTML = '✅ <strong>Meta concluída!</strong>';
+      else if (faltam === 1) hint.innerHTML = 'Falta <strong>1 treino</strong>';
+      else hint.innerHTML = `Faltam <strong>${faltam} treinos</strong>`;
+
+      // Setar select
+      const select = document.getElementById('selectMetaSemanal');
+      select.value = meta;
+    }
+
+    async function salvarMeta() {
+      const meta = parseInt(document.getElementById('selectMetaSemanal').value);
+      if (!meta || meta < 1 || meta > 14) return toast('Valor inválido');
+
+      try {
+        await API.patch('/usuarios/' + usuarioAtual.id, { metaSemanal: meta });
+        usuarioAtual.metaSemanal = meta;
+        localStorage.setItem('triad_usuario', JSON.stringify(usuarioAtual));
+        toast('✅ Meta atualizada!');
+        await carregarStats();
+        renderizarMetas();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao salvar');
+      }
+    }
+
+    /* ============================================================
+       RECALCULAR TREINO
+    ============================================================ */
+    function abrirModalRecalcular() {
+      abrirModal(`
+        <h3>🔄 Gerar novo treino</h3>
+        <p class="modal-sub">
+          Isso criará um <strong>novo plano</strong> baseado nos seus objetivos atuais.
+          O treino atual ficará salvo no histórico e poderá ser consultado depois.
+        </p>
+        <div class="aviso-treino">
+          <div class="icon">⚠️</div>
+          <div class="txt">
+            <h4>Deseja continuar?</h4>
+            <p>Se você alterou seus objetivos, frequência ou nível, recomendamos gerar um novo treino.</p>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="recalcularTreino()">Gerar novo treino</button>
+        </div>
+      `);
+    }
+
+    async function recalcularTreino() {
+      const btn = event?.target;
+      if (btn) { btn.disabled = true; btn.textContent = 'Gerando...'; }
+
+      try {
+        await API.post('/usuarios/' + usuarioAtual.id + '/gerar-treino', {
+          motivo: 'Recálculo manual via aluno.html'
+        });
+        fecharModal();
+        toast('✨ Novo treino gerado!');
+        await carregarTreinos();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao gerar treino');
+        if (btn) { btn.disabled = false; btn.textContent = 'Gerar novo treino'; }
+      }
+    }
+
+    /* ============================================================
+       TREINOS (histórico)
+    ============================================================ */
+    async function carregarTreinos() {
+      try {
+        const { data } = await API.get('/usuarios/' + usuarioAtual.id + '/historico-treinos');
+        treinos = data.treinos || [];
+      } catch { treinos = []; }
+    }
+
+    /* ============================================================
+       EVOLUÇÃO
+    ============================================================ */
+    async function carregarCheckins() {
+      try {
+        const { data } = await API.get('/checkins/' + usuarioAtual.id);
+        checkins = data.checkins || [];
+      } catch { checkins = []; }
+    }
+
+    function renderizarEvolucao() {
+      // 4 semanas
+      const agora = new Date();
+      const semanas = [0, 0, 0, 0];
+
+      checkins.forEach(c => {
+        const dias = Math.floor((agora - new Date(c.data)) / (1000 * 60 * 60 * 24));
+        if (dias < 7) semanas[3]++;
+        else if (dias < 14) semanas[2]++;
+        else if (dias < 21) semanas[1]++;
+        else if (dias < 28) semanas[0]++;
+      });
+
+      const max = Math.max(...semanas, 1);
+      const pontos = semanas.map((v, i) => ({
+        x: (i / 3) * 400,
+        y: 160 - (v / max) * 130
+      }));
+
+      const d = pontos.map((p, i) => {
+        if (i === 0) return `M${p.x},${p.y}`;
+        const prev = pontos[i - 1];
+        const cx1 = prev.x + (p.x - prev.x) / 2;
+        const cx2 = prev.x + (p.x - prev.x) / 2;
+        return `C${cx1},${prev.y} ${cx2},${p.y} ${p.x},${p.y}`;
+      }).join(' ');
+
+      document.getElementById('chartLine').setAttribute('d', d);
+      document.getElementById('chartArea').setAttribute('d', `${d} L400,180 L0,180 Z`);
+
+      // Percentual
+      const atual = semanas[3];
+      const anterior = semanas[2];
+      let pct = 0;
+      if (anterior > 0) pct = Math.round(((atual - anterior) / anterior) * 100);
+      else if (atual > 0) pct = 100;
+
+      const elPct = document.getElementById('evoPct');
+      const elArrow = document.getElementById('evoArrow');
+      const elTxt = document.getElementById('evoText');
+
+      if (pct > 0) {
+        elPct.textContent = `+${pct}%`;
+        elArrow.textContent = '↗';
+        elTxt.textContent = 'Seu desempenho está melhorando.';
+      } else if (pct < 0) {
+        elPct.textContent = `${pct}%`;
+        elArrow.textContent = '↘';
+        elTxt.textContent = 'Vamos retomar o ritmo?';
+      } else {
+        elPct.textContent = '0%';
+        elArrow.textContent = '→';
+        elTxt.textContent = stats?.sequencia > 0 ? 'Continue firme!' : 'Sem dados suficientes ainda.';
+      }
+
+      // Stats
+      const agora2 = new Date();
+      const inicioMes = new Date();
+      inicioMes.setDate(agora2.getDate() - 30);
+
+      document.getElementById('statTotalTreinos').textContent = checkins.length;
+      document.getElementById('statSequencia').textContent = (stats?.sequencia || 0) + ' dias';
+      document.getElementById('statSemana').textContent = stats?.treinosSemana || 0;
+      document.getElementById('statMes').textContent =
+        checkins.filter(c => new Date(c.data) >= inicioMes).length;
+    }
+
+    /* ============================================================
+       CHECK-INS
+    ============================================================ */
+    function renderizarCheckins() {
+      const container = document.getElementById('listaCheckins');
+      document.getElementById('checkinsTotal').textContent =
+        `${checkins.length} ${checkins.length === 1 ? 'registro' : 'registros'}`;
+
+      if (checkins.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <span class="emoji">📭</span>
+            Nenhum check-in registrado ainda.<br>
+            Faça seu primeiro treino para começar!
+          </div>`;
+        return;
+      }
+
+      const emojisHumor = {
+        baixa: '😴',
+        normal: '😐',
+        disposto: '🔥',
+        excelente: '💪'
+      };
+
+      container.innerHTML = checkins.slice(0, 30).map(c => {
+        const emoji = emojisHumor[c.humor] || '✅';
+        const data = new Date(c.data);
+        const dataFmt = data.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+        const horaFmt = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        return `
+          <div class="checkin-item">
+            <div class="checkin-icon ic-green">✅</div>
+            <div class="checkin-info">
+              <div class="titulo">${capitalize(c.tipo || 'Treino')}</div>
+              <div class="sub">${dataFmt} · ${horaFmt}${c.duracao ? ' · ' + c.duracao + 'min' : ''}</div>
+            </div>
+            <div class="checkin-humor">${emoji}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /* ============================================================
+       MODAIS DE EDIÇÃO
+    ============================================================ */
+    function abrirModalEditarPessoais() {
+      const dp = usuarioAtual.dadosPessoais || {};
+      abrirModal(`
+        <h3>✏️ Editar dados pessoais</h3>
+        <p class="modal-sub">Atualize suas informações de contato.</p>
+        <div class="field">
+          <label>Nome completo</label>
+          <input id="editNome" type="text" value="${escapeAttr(dp.nome || '')}" />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Telefone</label>
+            <input id="editTelefone" type="tel" value="${escapeAttr(dp.telefone || '')}" />
+          </div>
+          <div class="field">
+            <label>CPF</label>
+            <input id="editCpf" type="text" value="${escapeAttr(dp.cpf || '')}" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Cidade</label>
+          <input id="editCidade" type="text" value="${escapeAttr(dp.endereco?.cidade || '')}" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarPessoais()">Salvar</button>
+        </div>
+      `);
+    }
+
+    async function salvarPessoais() {
+      const nome = document.getElementById('editNome').value.trim();
+      const telefone = document.getElementById('editTelefone').value.trim();
+      const cpf = document.getElementById('editCpf').value.trim();
+      const cidade = document.getElementById('editCidade').value.trim();
+
+      if (!nome || nome.length < 3) return toast('Informe um nome válido');
+
+      try {
+        const dp = usuarioAtual.dadosPessoais || {};
+        await API.put('/usuarios/' + usuarioAtual.id + '/perfil-completo', {
+          dadosPessoais: {
+            ...dp,
+            nome,
+            telefone,
+            cpf,
+            endereco: {
+              ...(dp.endereco || {}),
+              cidade
+            }
+          }
+        });
+        fecharModal();
+        toast('✅ Dados atualizados!');
+        await recarregarUsuario();
+        renderizarPerfil();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao salvar');
+      }
+    }
+
+    function abrirModalEditarFisicos() {
+      const df = usuarioAtual.dadosFisicos || {};
+      abrirModal(`
+        <h3>📏 Atualizar dados físicos</h3>
+        <p class="modal-sub">Mantenha suas medidas atualizadas para um treino mais preciso.</p>
+        <div class="row">
+          <div class="field">
+            <label>Peso (kg)</label>
+            <input id="editPeso" type="number" step="0.1" min="30" max="250" value="${df.peso || ''}" />
+          </div>
+          <div class="field">
+            <label>Altura (cm)</label>
+            <input id="editAltura" type="number" min="100" max="250" value="${df.altura || ''}" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>% Gordura</label>
+            <input id="editGordura" type="number" step="0.1" min="3" max="60" value="${df.percentualGordura || ''}" />
+          </div>
+          <div class="field">
+            <label>Tipo corporal</label>
+            <select id="editTipoCorporal">
+              <option value="">—</option>
+              <option value="ectomorfo" ${df.tipoCorporal === 'ectomorfo' ? 'selected' : ''}>Ectomorfo</option>
+              <option value="mesomorfo" ${df.tipoCorporal === 'mesomorfo' ? 'selected' : ''}>Mesomorfo</option>
+              <option value="endomorfo" ${df.tipoCorporal === 'endomorfo' ? 'selected' : ''}>Endomorfo</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarFisicos()">Salvar</button>
+        </div>
+      `);
+    }
+
+    async function salvarFisicos() {
+      const peso = parseFloat(document.getElementById('editPeso').value);
+      const altura = parseFloat(document.getElementById('editAltura').value);
+      const percentualGordura = parseFloat(document.getElementById('editGordura').value) || null;
+      const tipoCorporal = document.getElementById('editTipoCorporal').value || null;
+
+      if (!peso || peso < 30) return toast('Informe um peso válido');
+      if (!altura || altura < 100) return toast('Informe uma altura válida');
+
+      try {
+        await API.put('/usuarios/' + usuarioAtual.id + '/perfil-completo', {
+          dadosFisicos: { peso, altura, percentualGordura, tipoCorporal }
+        });
+        fecharModal();
+        toast('✅ Dados físicos atualizados!');
+        await recarregarUsuario();
+        renderizarPerfil();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao salvar');
+      }
+    }
+
+    function abrirModalEditarObjetivos() {
+      const ob = usuarioAtual.objetivos || {};
+      abrirModal(`
+        <h3>🎯 Editar objetivos</h3>
+        <p class="modal-sub">Alterar esses dados pode recomendar um novo treino.</p>
+        <div class="field">
+          <label>Objetivo principal</label>
+          <select id="editObjetivo">
+            <option value="hipertrofia" ${ob.principal === 'hipertrofia' ? 'selected' : ''}>💪 Hipertrofia</option>
+            <option value="forca" ${ob.principal === 'forca' ? 'selected' : ''}>🏋️ Força</option>
+            <option value="emagrecimento" ${ob.principal === 'emagrecimento' ? 'selected' : ''}>🔥 Emagrecimento</option>
+            <option value="resistencia" ${ob.principal === 'resistencia' ? 'selected' : ''}>🏃 Resistência</option>
+            <option value="condicionamento" ${ob.principal === 'condicionamento' ? 'selected' : ''}>✨ Bem-estar</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nível</label>
+          <select id="editNivel">
+            <option value="iniciante" ${ob.nivel === 'iniciante' ? 'selected' : ''}>🌱 Iniciante</option>
+            <option value="intermediario" ${ob.nivel === 'intermediario' ? 'selected' : ''}>🌿 Intermediário</option>
+            <option value="avancado" ${ob.nivel === 'avancado' ? 'selected' : ''}>🌳 Avançado</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Restrições / lesões</label>
+          <textarea id="editRestricoes" rows="2" placeholder="Ex.: dor no ombro direito">${escapeAttr(ob.restricoes?.join(', ') || '')}</textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarObjetivos()">Salvar</button>
+        </div>
+      `);
+    }
+
+    async function salvarObjetivos() {
+      const principal = document.getElementById('editObjetivo').value;
+      const nivel = document.getElementById('editNivel').value;
+      const restricoesTxt = document.getElementById('editRestricoes').value.trim();
+      const restricoes = restricoesTxt
+        ? restricoesTxt.split(/[,;\n]/).map(r => r.trim()).filter(Boolean)
+        : [];
+
+      try {
+        await API.put('/usuarios/' + usuarioAtual.id + '/perfil-completo', {
+          objetivos: { principal, nivel, restricoes }
+        });
+        fecharModal();
+
+        // Pergunta se quer regenerar treino
+        setTimeout(() => {
+          abrirModal(`
+            <h3>🔄 Atualizar treino?</h3>
+            <p class="modal-sub">
+              Você alterou seus objetivos. Deseja gerar um novo plano de treino
+              baseado nas novas informações?
+            </p>
+            <div class="modal-actions">
+              <button class="btn btn-ghost" onclick="fecharModal()">Manter treino atual</button>
+              <button class="btn btn-primary" onclick="recalcularTreino()">Gerar novo treino</button>
+            </div>
+          `);
+        }, 300);
+
+        await recarregarUsuario();
+        renderizarPerfil();
+      } catch (err) {
+        toast(err.response?.data?.erro || 'Erro ao salvar');
+      }
+    }
+
+    /* ============================================================
+       PERFIL MODAL (configurações)
+    ============================================================ */
+    function abrirModalPerfil() {
+      const nome = usuarioAtual.dadosPessoais?.nome || usuarioAtual.nome || 'Aluno';
+      const iniciais = nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+      abrirModal(`
+        <div style="text-align:center;margin-bottom:22px;">
+          <div style="width:80px;height:80px;border-radius:22px;background:linear-gradient(135deg,var(--primary),var(--primary-deep));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;margin:0 auto 14px;box-shadow:var(--shadow-primary);">${iniciais}</div>
+          <h3 style="margin-bottom:4px;">${escapeHtml(nome)}</h3>
+          <p style="margin-bottom:0;color:var(--muted);font-size:13px;">${escapeHtml(usuarioAtual.email || '')}</p>
+        </div>
+        <button class="btn btn-danger" style="width:100%;" onclick="logout()">Sair da conta</button>
+      `);
+    }
+
+    function logout() {
+      localStorage.removeItem('triad_usuario');
+      window.location.href = 'index.html';
+    }
+
+    /* ============================================================
+       MODAL GENÉRICO
+    ============================================================ */
+    function abrirModal(html) {
+      document.getElementById('modalBody').innerHTML = html;
+      document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    function fecharModal(e) {
+      if (e && e.target !== document.getElementById('modalOverlay')) return;
+      document.getElementById('modalOverlay').classList.remove('show');
+    }
+
+    /* ============================================================
+       HELPERS
+    ============================================================ */
+    async function recarregarUsuario() {
+      try {
+        const { data } = await API.get('/usuarios/' + usuarioAtual.id);
+        usuarioAtual = data.usuario;
+        localStorage.setItem('triad_usuario', JSON.stringify(usuarioAtual));
+      } catch {}
+    }
+
+    function capitalize(str) {
+      if (!str) return '';
+      return String(str).charAt(0).toUpperCase() + String(str).slice(1);
+    }
+
+    function escapeHtml(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeAttr(s) {
+      return escapeHtml(s);
+    }
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show';
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.remove('show'), 3200);
+    }
+
+    function irPara(url) { window.location.href = url; }
+  </script>
+</body>
+</html>

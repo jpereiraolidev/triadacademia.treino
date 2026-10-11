@@ -1,0 +1,43 @@
+{
+  "name": "triadacademia.treino",
+  "version": "1.0.0",
+  "description": "Triad Academia API",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon api.js",
+    "start": "node api.js",
+    "vercel-build": "prisma generate",
+    "postinstall": "prisma generate",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jpereiraolidev/triadacademia.treino.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/jpereiraolidev/triadacademia.treino/issues"
+  },
+  "homepage": "https://github.com/jpereiraolidev/triadacademia.treino#readme",
+  "engines": {
+    "node": ">=20.x"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "argon2": "^0.45.1",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.7",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "prisma": "^5.22.0"
+  }
+}

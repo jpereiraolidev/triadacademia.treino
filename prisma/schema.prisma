@@ -1,0 +1,271 @@
+// ============================================
+// CONFIG
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  ADMIN
+  PROFESSOR
+  RECEPCAO
+}
+
+enum WorkoutStatus {
+  ATIVO
+  FINALIZADO
+  ARQUIVADO
+}
+
+enum MembershipStatus {
+  ATIVA
+  VENCIDA
+  CANCELADA
+  SUSPENSA
+}
+
+enum CheckinType {
+  ENTRADA
+  SAIDA
+}
+
+enum CheckinStatus {
+  AUTORIZADO
+  NEGADO
+}
+
+// ============================================
+// USER
+// ============================================
+model User {
+  id       String   @id @default(cuid())
+  name     String   @db.VarChar(120)
+  email    String   @unique @db.VarChar(160)
+  password String   @db.VarChar(255)
+  role     UserRole @default(PROFESSOR)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdWorkouts WorkoutPlan[] @relation("WorkoutCreator")
+  checkins        Checkin[]     @relation("CheckinRegisteredBy")
+
+  @@index([email])
+  @@index([active])
+}
+
+// ============================================
+// STUDENT
+// ============================================
+model Student {
+  id        String    @id @default(cuid())
+  name      String    @db.VarChar(120)
+  email     String?   @unique @db.VarChar(160)
+  phone     String?   @db.VarChar(20)
+  birthDate DateTime?
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workoutPlans WorkoutPlan[]
+  memberships  Membership[]
+  checkins     Checkin[]
+
+  @@index([name])
+  @@index([active])
+}
+
+// ============================================
+// PLAN
+// ============================================
+model Plan {
+  id          String  @id @default(cuid())
+  name        String  @db.VarChar(80)
+  description String? @db.Text
+
+  price        Decimal @db.Decimal(10, 2)
+  durationDays Int
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+
+  @@index([name])
+  @@index([active])
+}
+
+// ============================================
+// MEMBERSHIP
+// ============================================
+model Membership {
+  id        String @id @default(cuid())
+  studentId String
+  planId    String
+
+  startDate DateTime
+  endDate   DateTime
+
+  priceAtPurchase Decimal @db.Decimal(10, 2)
+
+  status MembershipStatus @default(ATIVA)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  checkins Checkin[]
+
+  @@index([studentId, status])
+  @@index([studentId, endDate])
+  @@index([planId])
+  @@index([status])
+  @@index([endDate])
+}
+
+// ============================================
+// DEVICE
+// ============================================
+model Device {
+  id         String @id @default(cuid())
+  name       String @db.VarChar(80)
+  identifier String @unique @db.VarChar(80)
+
+  apiKeyHash String @unique @db.VarChar(255)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checkins Checkin[]
+
+  @@index([identifier])
+  @@index([active])
+}
+
+// ============================================
+// CHECKIN
+// ============================================
+model Checkin {
+  id String @id @default(cuid())
+
+  studentId String
+
+  membershipId String?
+  deviceId     String?
+  registeredBy String?
+
+  type   CheckinType
+  status CheckinStatus
+
+  reason String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  student        Student     @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  membership     Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  device         Device?     @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  registeredUser User?       @relation("CheckinRegisteredBy", fields: [registeredBy], references: [id], onDelete: SetNull)
+
+  @@index([studentId, createdAt])
+  @@index([membershipId])
+  @@index([deviceId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+// ============================================
+// EXERCISE
+// ============================================
+model Exercise {
+  id          String  @id @default(cuid())
+  name        String  @db.VarChar(255)   // ← 255
+  description String? @db.Text
+  muscleGroup String? @db.VarChar(255)   // ← 255 também
+  videoUrl    String? @db.VarChar(500)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workoutExercises WorkoutExercise[]
+
+  @@index([name])
+  @@index([muscleGroup])
+  @@index([active])
+}
+
+// ============================================
+// WORKOUT PLAN
+// ============================================
+model WorkoutPlan {
+  id        String @id @default(cuid())
+  studentId String
+  createdBy String
+
+  name        String  @db.VarChar(120)
+  description String? @db.Text
+
+  status WorkoutStatus @default(ATIVO)
+
+  startDate DateTime
+  endDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  creator User    @relation("WorkoutCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  exercises WorkoutExercise[]
+
+  @@index([studentId])
+  @@index([createdBy])
+  @@index([status])
+  @@index([studentId, status])
+}
+
+// ============================================
+// WORKOUT EXERCISE
+// ============================================
+model WorkoutExercise {
+  id         String @id @default(cuid())
+  workoutId  String
+  exerciseId String
+
+  order Int
+
+  sets        Int?
+  repetitions String?  @db.VarChar(40)
+  weight      Decimal? @db.Decimal(8, 2)
+  restSeconds Int?
+  notes       String?  @db.Text
+
+  createdAt DateTime @default(now())
+
+  workout  WorkoutPlan @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercise Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@index([workoutId])
+  @@index([exerciseId])
+}

@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Triad Academia | Treino</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    /* ============================================================
+       RESET / VARIÁVEIS
+    ============================================================ */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root,
+    [data-theme="light"] {
+      --bg: #f7faf8;
+      --card: #ffffff;
+      --card-2: #f4f9f5;
+      --border: #eaf1ec;
+      --border-2: #dfe9e2;
+      --text: #0f2417;
+      --text-2: #2b4436;
+      --muted: #7a9184;
+      --muted-2: #a8bfb2;
+      --primary: #00b85c;
+      --primary-2: #00e676;
+      --primary-deep: #008f47;
+      --primary-soft: #e6f9ee;
+      --primary-soft-2: #d1f4e0;
+
+      --c-green-bg: #e6f9ee;   --c-green-fg: #00a352;
+      --c-blue-bg:  #e8f1ff;   --c-blue-fg:  #2563eb;
+      --c-purple-bg:#f1ebff;   --c-purple-fg:#7c3aed;
+      --c-pink-bg:  #ffe9f0;   --c-pink-fg:  #db2777;
+      --c-orange-bg:#fff1e3;   --c-orange-fg:#ea580c;
+      --c-yellow-bg:#fff8e1;   --c-yellow-fg:#ca8a04;
+      --c-red-bg:   #ffe8e8;   --c-red-fg:   #dc2626;
+
+      --shadow-sm: 0 1px 3px rgba(15, 36, 23, 0.05), 0 1px 2px rgba(15, 36, 23, 0.03);
+      --shadow-md: 0 4px 16px rgba(15, 36, 23, 0.06);
+      --shadow-lg: 0 12px 40px rgba(15, 36, 23, 0.08);
+      --shadow-primary: 0 8px 24px rgba(0, 184, 92, 0.25);
+    }
+
+    [data-theme="dark"] {
+      --bg: #071410;
+      --card: #0e2419;
+      --card-2: #122e21;
+      --border: #1a3d29;
+      --border-2: #234c34;
+      --text: #e8f7ee;
+      --text-2: #b8d9c5;
+      --muted: #7a9a86;
+      --muted-2: #4f7060;
+      --primary: #00e676;
+      --primary-2: #4dffb0;
+      --primary-deep: #00b85c;
+      --primary-soft: #0d3320;
+      --primary-soft-2: #114028;
+
+      --c-green-bg:  #0d3320;  --c-green-fg:  #4dffb0;
+      --c-blue-bg:   #0d213a;  --c-blue-fg:   #60a5fa;
+      --c-purple-bg: #1e1238;  --c-purple-fg: #a78bfa;
+      --c-pink-bg:   #3a0d21;  --c-pink-fg:   #f472b6;
+      --c-orange-bg: #3a250d;  --c-orange-fg: #fbbf24;
+      --c-yellow-bg: #3a340d;  --c-yellow-fg: #facc15;
+      --c-red-bg:    #3a0d0d;  --c-red-fg:    #f87171;
+
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+      --shadow-primary: 0 8px 24px rgba(0, 230, 118, 0.3);
+    }
+
+    html, body { min-height: 100vh; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.4s ease, color 0.4s ease;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 90px;
+    }
+
+    /* ============================================================
+       HEADER FIXO
+    ============================================================ */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .back-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      flex-shrink: 0;
+      transition: 0.15s;
+      font-family: inherit;
+    }
+
+    .back-btn:hover {
+      background: var(--card);
+      border-color: var(--border-2);
+      transform: translateX(-2px);
+    }
+
+    .topbar-title {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .topbar-title h1 {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--text);
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .topbar-title p {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .timer-total {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 14px;
+      border-radius: 12px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.2px;
+      white-space: nowrap;
+    }
+
+    .timer-total .dot-live {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--c-red-fg);
+      box-shadow: 0 0 8px var(--c-red-fg);
+      animation: blink 1.4s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ============================================================
+       PROGRESSO DO TREINO
+    ============================================================ */
+    .progress-top {
+      position: sticky;
+      top: 73px;
+      z-index: 40;
+      background: var(--bg);
+      padding: 14px 24px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    .progress-info .label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-size: 11px;
+    }
+
+    .progress-info .pct {
+      color: var(--primary-deep);
+      font-weight: 800;
+    }
+
+    [data-theme="dark"] .progress-info .pct { color: var(--primary-2); }
+
+    .progress {
+      width: 100%;
+      height: 6px;
+      background: var(--card-2);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--primary-2));
+      border-radius: 6px;
+      transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 10px rgba(0, 184, 92, 0.5);
+    }
+
+    /* ============================================================
+       CONTAINER
+    ============================================================ */
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 22px 24px;
+    }
+
+    /* ============================================================
+       EXERCÍCIO CARD
+    ============================================================ */
+    .exercise {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-sm);
+      transition: 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .exercise.done {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      opacity: 0.85;
+    }
+
+    [data-theme="dark"] .exercise.done {
+      background: var(--primary-soft);
+    }
+
+    .exercise.done .ex-number {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    .exercise.done .ex-name {
+      text-decoration: line-through;
+      text-decoration-color: var(--primary);
+      text-decoration-thickness: 2px;
+      opacity: 0.75;
+    }
+
+    .ex-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .ex-number {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: 0.2s;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ex-info { flex: 1; min-width: 0; }
+
+    .ex-name {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.3px;
+      line-height: 1.25;
+      transition: 0.2s;
+    }
+
+    .ex-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .ex-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--text-2);
+      letter-spacing: -0.1px;
+    }
+
+    .ex-chip.green  { background: var(--c-green-bg);  color: var(--c-green-fg);  border-color: transparent; }
+    .ex-chip.blue   { background: var(--c-blue-bg);   color: var(--c-blue-fg);   border-color: transparent; }
+    .ex-chip.purple { background: var(--c-purple-bg); color: var(--c-purple-fg); border-color: transparent; }
+    .ex-chip.orange { background: var(--c-orange-bg); color: var(--c-orange-fg); border-color: transparent; }
+
+    .ex-instrucoes {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 11px 12px;
+      background: var(--card-2);
+      border-radius: 12px;
+      font-size: 12.5px;
+      color: var(--text-2);
+      font-weight: 500;
+      line-height: 1.45;
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+    }
+
+    .ex-instrucoes .ico {
+      font-size: 14px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ============================================================
+       SÉRIES
+    ============================================================ */
+    .series-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .series-label .count {
+      color: var(--primary-deep);
+      font-weight: 800;
+    }
+
+    [data-theme="dark"] .series-label .count { color: var(--primary-2); }
+
+    .series-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .serie-btn {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: var(--card-2);
+      border: 1.5px solid var(--border);
+      color: var(--text-2);
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: 0.15s;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .serie-btn:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+
+    .serie-btn:active { transform: scale(0.94); }
+
+    .serie-btn.done {
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      border-color: var(--primary);
+      color: #fff;
+      box-shadow: 0 4px 14px var(--shadow-primary);
+    }
+
+    .serie-btn.done::after {
+      content: '✓';
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 16px;
+      height: 16px;
+      background: var(--c-green-fg);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--card);
+    }
+
+    /* ============================================================
+       AÇÕES DO EXERCÍCIO
+    ============================================================ */
+    .ex-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-small {
+      padding: 10px 14px;
+      border-radius: 11px;
+      border: 1px solid var(--border);
+      background: var(--card-2);
+      color: var(--text-2);
+      font-size: 12.5px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: -0.1px;
+    }
+
+    .btn-small:hover {
+      background: var(--card);
+      border-color: var(--border-2);
+      color: var(--text);
+    }
+
+    .btn-small.success {
+      background: var(--c-green-bg);
+      color: var(--c-green-fg);
+      border-color: transparent;
+      font-weight: 800;
+    }
+
+    .btn-small.success:hover {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* ============================================================
+       TIMER DE DESCANSO (MODAL/BOTTOM SHEET)
+    ============================================================ */
+    .rest-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 36, 23, 0.65);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .rest-overlay.show { display: flex; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .rest-card {
+      background: var(--card);
+      border-radius: 26px;
+      padding: 32px 28px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      animation: modalIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.92) translateY(12px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .rest-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--c-blue-bg), var(--c-purple-bg));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 30px;
+    }
+
+    .rest-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: -0.2px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .rest-timer {
+      font-size: 64px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -3px;
+      line-height: 1;
+      margin: 12px 0 22px;
+      font-variant-numeric: tabular-nums;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .rest-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .rest-actions .btn {
+      flex: 1;
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: 0.15s;
+      font-family: inherit;
+      border: none;
+    }
+
+    .btn-pular {
+      background: var(--card-2);
+      color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+
+    .btn-pular:hover {
+      background: var(--card);
+      color: var(--text);
+    }
+
+    .btn-ok {
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      color: #fff;
+      box-shadow: var(--shadow-primary);
+    }
+
+    .btn-ok:hover { transform: translateY(-1px); }
+
+    /* ============================================================
+       FINALIZAR (BARRA FIXA)
+    ============================================================ */
+    .bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      padding: 14px 24px;
+      box-shadow: 0 -4px 20px rgba(15, 36, 23, 0.06);
+      z-index: 60;
+    }
+
+    [data-theme="dark"] .bottom-bar {
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .bottom-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .bottom-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bottom-info .linha-1 {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+
+    .bottom-info .linha-2 {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    .btn-finish {
+      padding: 14px 22px;
+      border-radius: 13px;
+      border: none;
+      font-family: inherit;
+      font-size: 14.5px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: 0.15s;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      color: #fff;
+      box-shadow: var(--shadow-primary);
+      letter-spacing: -0.2px;
+      white-space: nowrap;
+    }
+
+    .btn-finish:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 32px rgba(0, 184, 92, 0.35);
+    }
+
+    .btn-finish:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* ============================================================
+       CONCLUÍDO (TELA FINAL)
+    ============================================================ */
+    .concluido {
+      display: none;
+      text-align: center;
+      padding: 60px 24px;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .concluido.show { display: block; animation: fadeUp 0.5s ease; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .concluido-icon {
+      width: 110px;
+      height: 110px;
+      border-radius: 32px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      font-size: 52px;
+      color: #fff;
+      box-shadow: 0 20px 60px var(--shadow-primary);
+      animation: pop 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.3s both;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.5); opacity: 0; }
+      60% { transform: scale(1.08); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .concluido h2 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .concluido p {
+      font-size: 14.5px;
+      color: var(--muted);
+      font-weight: 500;
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+
+    .concluido-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .concluido-stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 12px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .concluido-stat .valor {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.5px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .concluido-stat .rotulo {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .concluido-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .concluido-actions .btn {
+      padding: 14px 22px;
+      border-radius: 13px;
+      border: none;
+      font-family: inherit;
+      font-size: 14.5px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: 0.15s;
+      letter-spacing: -0.2px;
+    }
+
+    .concluido-actions .primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      color: #fff;
+      box-shadow: var(--shadow-primary);
+    }
+
+    .concluido-actions .primary:hover {
+      transform: translateY(-1px);
+    }
+
+    .concluido-actions .ghost {
+      background: var(--card-2);
+      color: var(--text-2);
+      border: 1px solid var(--border);
+    }
+
+    .concluido-actions .ghost:hover {
+      background: var(--card);
+      color: var(--text);
+    }
+
+    /* ============================================================
+       TOAST
+    ============================================================ */
+    .toast {
+      position: fixed;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--text);
+      color: var(--bg);
+      border-radius: 14px;
+      padding: 13px 22px;
+      font-size: 13.5px;
+      font-weight: 700;
+      z-index: 1100;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: var(--shadow-lg);
+      max-width: 90vw;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: -0.2px;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ============================================================
+       LOADING
+    ============================================================ */
+    .loading-full {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 70vh;
+      gap: 16px;
+      padding: 40px 24px;
+    }
+
+    .spinner {
+      width: 46px;
+      height: 46px;
+      border: 4px solid var(--card-2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-full p {
+      font-size: 13.5px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    /* ============================================================
+       RESPONSIVO
+    ============================================================ */
+    @media (max-width: 560px) {
+      .topbar { padding: 12px 16px; }
+      .topbar-title h1 { font-size: 14px; }
+      .timer-total { font-size: 12px; padding: 8px 12px; }
+      .progress-top { padding: 12px 16px; }
+      .container { padding: 18px 16px; }
+      .exercise { padding: 16px; }
+      .rest-timer { font-size: 52px; }
+      .concluido h2 { font-size: 22px; }
+      .concluido-stats { grid-template-columns: 1fr 1fr; }
+      .bottom-bar { padding: 12px 16px; }
+      .bottom-info { display: none; }
+      .btn-finish { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       TOPBAR
+  ============================================================ -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="back-btn" onclick="confirmarSaida()">←</button>
+      <div class="topbar-title">
+        <h1 id="topbarTitle">Carregando treino...</h1>
+        <p id="topbarSub">Buscando dados</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="timer-total">
+        <span class="dot-live"></span>
+        <span id="tempoTotal">00:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PROGRESSO
+      ============================================================ -->
+  <div class="progress-top" id="progressTop" style="display:none;">
+    <div class="progress-info">
+      <span class="label" id="progressLabel">0 de 0 séries</span>
+      <span class="pct" id="progressPct">0%</span>
+    </div>
+    <div class="progress">
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       CONTAINER
+  ============================================================ -->
+  <div class="container" id="container">
+
+    <!-- LOADING -->
+    <div class="loading-full" id="loading">
+      <div class="spinner"></div>
+      <p>Carregando seu treino...</p>
+    </div>
+
+    <!-- EXERCÍCIOS (renderizados via JS) -->
+    <div id="exercicios"></div>
+
+    <!-- CONCLUÍDO -->
+    <div class="concluido" id="concluido">
+      <div class="concluido-icon">🎉</div>
+      <h2>Treino concluído!</h2>
+      <p id="concluidoSub">Você completou todos os exercícios. Excelente trabalho!</p>
+
+      <div class="concluido-stats">
+        <div class="concluido-stat">
+          <div class="valor" id="concluidoTempo">00:00</div>
+          <div class="rotulo">Tempo</div>
+        </div>
+        <div class="concluido-stat">
+          <div class="valor" id="concluidoSeries">0</div>
+          <div class="rotulo">Séries</div>
+        </div>
+        <div class="concluido-stat">
+          <div class="valor" id="concluidoEx">0</div>
+          <div class="rotulo">Exercícios</div>
+        </div>
+      </div>
+
+      <div class="concluido-actions">
+        <button class="btn primary" onclick="irParaHome()">Voltar ao início</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       BOTTOM BAR (FINALIZAR)
+  ============================================================ -->
+  <div class="bottom-bar" id="bottomBar" style="display:none;">
+    <div class="bottom-inner">
+      <div class="bottom-info">
+        <div class="linha-1" id="bottomLinha1">0 de 0 séries concluídas</div>
+        <div class="linha-2" id="bottomLinha2">Continue firme! 💪</div>
+      </div>
+      <button class="btn-finish" id="btnFinalizar" onclick="finalizarTreino()" disabled>
+        Finalizar treino
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TIMER DE DESCANSO
+  ============================================================ -->
+  <div class="rest-overlay" id="restOverlay">
+    <div class="rest-card">
+      <div class="rest-icon">☕</div>
+      <div class="rest-title">Descanso</div>
+      <div class="rest-timer" id="restTimer">60</div>
+      <div class="rest-actions">
+        <button class="btn btn-pular" onclick="pularDescanso()">Pular</button>
+        <button class="btn btn-ok" onclick="pularDescanso()">Pronto ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ============================================================
+       API
+    ============================================================ */
+    const API = axios.create({
+      baseURL: window.location.origin + '/api',
+      timeout: 10000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    /* ============================================================
+       ESTADO
+    ============================================================ */
+    let usuarioAtual = null;
+    let treinoId = null;
+    let sessaoId = null;
+    let sessao = null;
+    let treinoNome = '';
+    let exercicios = [];
+
+    let estadoSeries = {}; // { exIndex: [true, false, ...] }
+
+    let totalSeries = 0;
+    let seriesFeitas = 0;
+
+    let inicioTimestamp = null;
+    let intervaloTempoTotal = null;
+
+    // Timer de descanso
+    let restInterval = null;
+    let restSegundos = 0;
+
+    /* ============================================================
+       INIT
+    ============================================================ */
+    (async function init() {
+      const salvo = localStorage.getItem('triad_usuario');
+      if (!salvo) { window.location.href = 'index.html'; return; }
+
+      try { usuarioAtual = JSON.parse(salvo); }
+      catch { window.location.href = 'index.html'; return; }
+
+      // Lê os parâmetros da URL
+      const params = new URLSearchParams(window.location.search);
+      sessaoId = params.get('sessao');
+      treinoId = params.get('treino');
+
+      // Se não veio nada, tenta o treino de hoje
+      if (!sessaoId || !treinoId) {
+        await carregarTreinoHoje();
+      } else {
+        await carregarSessaoEspecifica(treinoId, sessaoId);
+      }
+    })();
+
+    /* ============================================================
+       CARREGA TREINO DO DIA
+    ============================================================ */
+    async function carregarTreinoHoje() {
+      try {
+        const { data } = await API.get('/usuarios/' + usuarioAtual.id + '/treino-hoje');
+
+        if (!data.sessaoHoje) {
+          toast('Nenhum treino agendado para hoje');
+          setTimeout(() => window.location.href = 'home.html', 1500);
+          return;
+        }
+
+        treinoId = data.treino.id;
+        sessaoId = data.sessaoHoje.id;
+        sessao = data.sessaoHoje;
+        treinoNome = data.treino.nome;
+
+        montarTreino();
+      } catch (err) {
+        console.error(err);
+        toast('Erro ao carregar treino');
+        setTimeout(() => window.location.href = 'home.html', 1500);
+      }
+    }
+
+    /* ============================================================
+       CARREGA SESSÃO ESPECÍFICA
+    ============================================================ */
+    async function carregarSessaoEspecifica(tId, sId) {
+      try {
+        const { data } = await API.get(`/treinos/${tId}/sessao/${sId}`);
+        sessao = data.sessao;
+        treinoNome = data.treinoNome;
+
+        montarTreino();
+      } catch (err) {
+        console.error(err);
+        toast('Sessão não encontrada');
+        setTimeout(() => window.location.href = 'home.html', 1500);
+      }
+    }
+
+    /* ============================================================
+       MONTA O TREINO NA TELA
+    ============================================================ */
+    function montarTreino() {
+      if (!sessao) return;
+
+      exercicios = sessao.exercicios || [];
+
+      // Estado inicial das séries
+      estadoSeries = {};
+      exercicios.forEach((ex, i) => {
+        estadoSeries[i] = new Array(ex.series).fill(false);
+      });
+
+      totalSeries = exercicios.reduce((acc, ex) => acc + ex.series, 0);
+      seriesFeitas = 0;
+
+      // Topbar
+      document.getElementById('topbarTitle').textContent = sessao.nome;
+      document.getElementById('topbarSub').textContent = treinoNome;
+
+      // Esconde loading
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('progressTop').style.display = 'block';
+      document.getElementById('bottomBar').style.display = 'block';
+
+      // Renderiza exercícios
+      renderizarExercicios();
+
+      // Inicia cronômetro total
+      inicioTimestamp = Date.now();
+      intervaloTempoTotal = setInterval(atualizarTempoTotal, 1000);
+
+      atualizarProgresso();
+    }
+
+    /* ============================================================
+       RENDERIZA EXERCÍCIOS
+    ============================================================ */
+    function renderizarExercicios() {
+      const container = document.getElementById('exercicios');
+
+      container.innerHTML = exercicios.map((ex, i) => {
+        const seriesArray = estadoSeries[i] || [];
+        const todasFeitas = seriesArray.every(v => v);
+
+        return `
+          <div class="exercise ${todasFeitas ? 'done' : ''}" id="ex-${i}">
+            <div class="ex-header">
+              <div class="ex-number">${i + 1}</div>
+              <div class="ex-info">
+                <div class="ex-name">${escapeHtml(ex.nome)}</div>
+                <div class="ex-meta">
+                  <span class="ex-chip green">${ex.series} séries</span>
+                  <span class="ex-chip blue">${escapeHtml(ex.repeticoes)} reps</span>
+                  <span class="ex-chip purple">${ex.descanso}s descanso</span>
+                  ${ex.carga && ex.carga !== '—' ? `<span class="ex-chip orange">💪 ${escapeHtml(ex.carga)}</span>` : ''}
+                </div>
+              </div>
+            </div>
+
+            ${ex.instrucoes ? `
+              <div class="ex-instrucoes">
+                <span class="ico">💡</span>
+                <span>${escapeHtml(ex.instrucoes)}</span>
+              </div>
+            ` : ''}
+
+            <div class="series-label">
+              <span>Marcar séries</span>
+              <span class="count" id="ex-count-${i}">
+                ${seriesArray.filter(v => v).length}/${ex.series}
+              </span>
+            </div>
+
+            <div class="series-grid">
+              ${seriesArray.map((feita, j) => `
+                <button
+                  class="serie-btn ${feita ? 'done' : ''}"
+                  onclick="toggleSerie(${i}, ${j})"
+                  title="Série ${j + 1}"
+                >${j + 1}</button>
+              `).join('')}
+            </div>
+
+            <div class="ex-actions">
+              <button class="btn-small success" onclick="marcarTodas(${i})">
+                ✓ Marcar todas
+              </button>
+              <button class="btn-small" onclick="iniciarDescanso(${ex.descanso})">
+                ⏱️ Iniciar descanso
+              </button>
+              <button class="btn-small" onclick="resetarExercicio(${i})">
+                ↺ Resetar
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /* ============================================================
+       TOGGLE SÉRIE
+    ============================================================ */
+    function toggleSerie(exIndex, serieIndex) {
+      const arr = estadoSeries[exIndex];
+      arr[serieIndex] = !arr[serieIndex];
+
+      // Atualiza UI
+      const card = document.getElementById('ex-' + exIndex);
+      const botoes = card.querySelectorAll('.serie-btn');
+      botoes[serieIndex].classList.toggle('done', arr[serieIndex]);
+
+      // Atualiza contador
+      const count = document.getElementById('ex-count-' + exIndex);
+      count.textContent = `${arr.filter(v => v).length}/${arr.length}`;
+
+      // Verifica se o exercício foi concluído
+      const todas = arr.every(v => v);
+      card.classList.toggle('done', todas);
+
+      if (todas) {
+        toast('✅ Exercício concluído!');
+      }
+
+      recalcularSeriesFeitas();
+      atualizarProgresso();
+
+      // Se marcou uma série (não desmarcou), inicia descanso automaticamente
+      if (arr[serieIndex]) {
+        const ex = exercicios[exIndex];
+        // Só inicia se não for a última série do último exercício
+        if (!(exIndex === exercicios.length - 1 && serieIndex === arr.length - 1)) {
+          // Opcional: iniciarDescanso(ex.descanso);
+        }
+      }
+    }
+
+    /* ============================================================
+       MARCAR TODAS / RESETAR
+    ============================================================ */
+    function marcarTodas(exIndex) {
+      const arr = estadoSeries[exIndex];
+      arr.fill(true);
+
+      const card = document.getElementById('ex-' + exIndex);
+      card.classList.add('done');
+      card.querySelectorAll('.serie-btn').forEach(b => b.classList.add('done'));
+      document.getElementById('ex-count-' + exIndex).textContent = `${arr.length}/${arr.length}`;
+
+      recalcularSeriesFeitas();
+      atualizarProgresso();
+      toast('✅ Todas as séries marcadas!');
+    }
+
+    function resetarExercicio(exIndex) {
+      const arr = estadoSeries[exIndex];
+      arr.fill(false);
+
+      const card = document.getElementById('ex-' + exIndex);
+      card.classList.remove('done');
+      card.querySelectorAll('.serie-btn').forEach(b => b.classList.remove('done'));
+      document.getElementById('ex-count-' + exIndex).textContent = `0/${arr.length}`;
+
+      recalcularSeriesFeitas();
+      atualizarProgresso();
+    }
+
+    /* ============================================================
+       RECALCULAR SÉRIES
+    ============================================================ */
+    function recalcularSeriesFeitas() {
+      seriesFeitas = 0;
+      Object.values(estadoSeries).forEach(arr => {
+        seriesFeitas += arr.filter(v => v).length;
+      });
+    }
+
+    /* ============================================================
+       ATUALIZA PROGRESSO
+    ============================================================ */
+    function atualizarProgresso() {
+      const pct = totalSeries > 0 ? Math.round((seriesFeitas / totalSeries) * 100) : 0;
+
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('progressLabel').textContent = `${seriesFeitas} de ${totalSeries} séries`;
+      document.getElementById('progressPct').textContent = pct + '%';
+
+      // Bottom bar
+      document.getElementById('bottomLinha1').textContent = `${seriesFeitas} de ${totalSeries} séries concluídas`;
+
+      if (pct === 100) {
+        document.getElementById('bottomLinha2').textContent = '🎉 Tudo pronto! Finalize seu treino.';
+        document.getElementById('btnFinalizar').disabled = false;
+      } else if (pct >= 70) {
+        document.getElementById('bottomLinha2').textContent = '💪 Você está quase lá!';
+        document.getElementById('btnFinalizar').disabled = false;
+      } else if (pct > 0) {
+        document.getElementById('bottomLinha2').textContent = 'Continue firme! 🔥';
+        document.getElementById('btnFinalizar').disabled = false;
+      } else {
+        document.getElementById('bottomLinha2').textContent = 'Comece marcando as séries';
+        document.getElementById('btnFinalizar').disabled = true;
+      }
+    }
+
+    /* ============================================================
+       CRONÔMETRO TOTAL
+    ============================================================ */
+    function atualizarTempoTotal() {
+      if (!inicioTimestamp) return;
+      const seg = Math.floor((Date.now() - inicioTimestamp) / 1000);
+      document.getElementById('tempoTotal').textContent = formatarTempo(seg);
+    }
+
+    function formatarTempo(seg) {
+      const h = Math.floor(seg / 3600);
+      const m = Math.floor((seg % 3600) / 60);
+      const s = seg % 60;
+      if (h > 0) {
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    /* ============================================================
+       DESCANSO
+    ============================================================ */
+    function iniciarDescanso(segundos) {
+      restSegundos = parseInt(segundos) || 60;
+      document.getElementById('restTimer').textContent = restSegundos;
+      document.getElementById('restOverlay').classList.add('show');
+
+      clearInterval(restInterval);
+      restInterval = setInterval(() => {
+        restSegundos--;
+        document.getElementById('restTimer').textContent = restSegundos;
+
+        if (restSegundos <= 0) {
+          pularDescanso();
+          tocarBipe();
+          toast('⏰ Descanso terminou!');
+        }
+      }, 1000);
+    }
+
+    function pularDescanso() {
+      clearInterval(restInterval);
+      restInterval = null;
+      document.getElementById('restOverlay').classList.remove('show');
+      restSegundos = 0;
+    }
+
+    function tocarBipe() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 800;
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      } catch {}
+    }
+
+    /* ============================================================
+       FINALIZAR TREINO
+    ============================================================ */
+    async function finalizarTreino() {
+      if (seriesFeitas === 0) {
+        toast('Marque pelo menos uma série antes de finalizar');
+        return;
+      }
+
+      const btn = document.getElementById('btnFinalizar');
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+
+      const duracaoSeg = inicioTimestamp ? Math.floor((Date.now() - inicioTimestamp) / 1000) : 0;
+      const duracaoMin = Math.round(duracaoSeg / 60);
+
+      try {
+        await API.post('/checkin', {
+          usuarioId: usuarioAtual.id,
+          tipo: 'treino',
+          sessaoId: sessao.id,
+          treinoId: treinoId,
+          duracao: duracaoMin,
+          humor: 'disposto'
+        });
+
+        mostrarTelaConcluido(duracaoSeg, seriesFeitas, exercicios.length);
+
+      } catch (err) {
+        console.error(err);
+        toast(err.response?.data?.erro || 'Erro ao salvar treino');
+        btn.disabled = false;
+        btn.textContent = 'Finalizar treino';
+      }
+    }
+
+    function mostrarTelaConcluido(seg, series, exs) {
+      clearInterval(intervaloTempoTotal);
+
+      document.getElementById('container').innerHTML = '';
+      document.getElementById('progressTop').style.display = 'none';
+      document.getElementById('bottomBar').style.display = 'none';
+      document.getElementById('topbarTitle').textContent = 'Treino finalizado';
+      document.getElementById('topbarSub').textContent = sessao.nome;
+
+      const concluido = document.getElementById('concluido');
+      document.getElementById('concluidoTempo').textContent = formatarTempo(seg);
+      document.getElementById('concluidoSeries').textContent = series;
+      document.getElementById('concluidoEx').textContent = exs;
+      concluido.classList.add('show');
+
+      // Reanexa o container (foi removido)
+      const novoContainer = document.createElement('div');
+      novoContainer.id = 'concluido-wrapper';
+      novoContainer.appendChild(concluido);
+      document.body.appendChild(novoContainer);
+    }
+
+    function irParaHome() {
+      window.location.href = 'home.html';
+    }
+
+    /* ============================================================
+       SAIR
+    ============================================================ */
+    function confirmarSaida() {
+      if (seriesFeitas > 0) {
+        if (confirm('Você tem séries marcadas. Sair mesmo assim? O progresso não será salvo.')) {
+          window.location.href = 'home.html';
+        }
+      } else {
+        window.location.href = 'home.html';
+      }
+    }
+
+    /* ============================================================
+       HELPERS
+    ============================================================ */
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show';
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.remove('show'), 3200);
+    }
+
+    /* ============================================================
+       AVISO AO SAIR
+    ============================================================ */
+    window.addEventListener('beforeunload', (e) => {
+      if (seriesFeitas > 0 && !document.getElementById('concluido').classList.contains('show')) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+  </script>
+</body>
+</html>

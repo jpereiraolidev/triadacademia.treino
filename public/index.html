@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Triad Academia | Acesso</title>
+
+  <!-- Bibliotecas -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+  <!-- CSS compartilhado -->
+  <link rel="stylesheet" href="assets/style.css" />
+
+  <!-- CSS específico da tela de acesso -->
+  <style>
+    /* ============================================================
+       FUNDO ANIMADO (exclusivo do index)
+    ============================================================ */
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      position: relative;
+      overflow-x: hidden;
+      background: var(--bg-soft);
+    }
+
+    [data-theme="dark"] body {
+      background: var(--bg);
+    }
+
+    .bg-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .aura {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.55;
+      animation: float 18s ease-in-out infinite;
+    }
+
+    .aura-1 {
+      width: 480px; height: 480px;
+      background: radial-gradient(circle, var(--primary-2), transparent 70%);
+      top: -120px; left: -120px;
+    }
+
+    .aura-2 {
+      width: 520px; height: 520px;
+      background: radial-gradient(circle, var(--primary-2), transparent 70%);
+      bottom: -160px; right: -140px;
+      animation-delay: -6s;
+    }
+
+    .aura-3 {
+      width: 380px; height: 380px;
+      background: radial-gradient(circle, #7dffc4, transparent 70%);
+      top: 40%; left: 55%;
+      animation-delay: -12s;
+    }
+
+    [data-theme="dark"] .aura { opacity: 0.4; }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(40px, -30px) scale(1.08); }
+      66% { transform: translate(-30px, 40px) scale(0.95); }
+    }
+
+    .bg-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(circle at 50% 50%, black 30%, transparent 75%);
+      -webkit-mask-image: radial-gradient(circle at 50% 50%, black 30%, transparent 75%);
+      opacity: 0.6;
+    }
+
+    .bg-rays {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.5;
+    }
+
+    [data-theme="dark"] .bg-rays { opacity: 0.7; }
+
+    .particles {
+      position: absolute;
+      inset: 0;
+    }
+
+    .particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 12px var(--glow);
+      animation: rise linear infinite;
+      opacity: 0;
+    }
+
+    @keyframes rise {
+      0% { transform: translateY(100vh) scale(0); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(-10vh) scale(1.2); opacity: 0; }
+    }
+
+    /* ============================================================
+       AUTH
+    ============================================================ */
+    .auth {
+      position: relative;
+      z-index: 5;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    /* BRAND */
+    .brand {
+      text-align: center;
+      margin-bottom: 26px;
+      animation: fadeIn 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .brand-logo {
+      position: relative;
+      width: 82px;
+      height: 82px;
+      margin: 0 auto 16px;
+      border-radius: 26px;
+      background: linear-gradient(145deg, var(--primary-2), var(--primary-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow:
+        0 12px 40px var(--glow),
+        inset 0 2px 4px rgba(255, 255, 255, 0.4),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.2);
+      animation: pulse 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow:
+          0 12px 40px var(--glow),
+          inset 0 2px 4px rgba(255, 255, 255, 0.4),
+          inset 0 -2px 6px rgba(0, 0, 0, 0.2);
+      }
+      50% {
+        box-shadow:
+          0 16px 60px var(--glow),
+          0 0 0 12px rgba(0, 230, 118, 0.08),
+          inset 0 2px 4px rgba(255, 255, 255, 0.4),
+          inset 0 -2px 6px rgba(0, 0, 0, 0.2);
+      }
+    }
+
+    .brand-logo svg {
+      width: 46px;
+      height: 46px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+
+    .brand h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      background: linear-gradient(135deg, var(--primary-deep), var(--primary-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+    }
+
+    .brand p {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+      letter-spacing: 0.3px;
+    }
+
+    /* CARD */
+    .auth-card {
+      position: relative;
+      background: var(--glass);
+      backdrop-filter: blur(40px) saturate(180%);
+      -webkit-backdrop-filter: blur(40px) saturate(180%);
+      border: 1px solid var(--glass-border);
+      border-radius: 30px;
+      padding: 28px 24px;
+      box-shadow: 0 20px 60px rgba(16, 120, 60, 0.15);
+      overflow: hidden;
+      animation: fadeIn 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.1s both;
+    }
+
+    .auth-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 55%;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent);
+      pointer-events: none;
+      border-radius: 30px 30px 0 0;
+    }
+
+    [data-theme="dark"] .auth-card::before {
+      background: linear-gradient(180deg, rgba(0, 230, 118, 0.08), transparent);
+    }
+
+    .auth-card::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -60%;
+      width: 40%;
+      height: 200%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+      transform: rotate(25deg);
+      animation: shine 6s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    [data-theme="dark"] .auth-card::after {
+      background: linear-gradient(90deg, transparent, rgba(0, 230, 118, 0.15), transparent);
+    }
+
+    @keyframes shine {
+      0%, 70% { left: -60%; }
+      100% { left: 130%; }
+    }
+
+    /* TOPO DO CARD */
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary-deep);
+      background: var(--primary-soft);
+      padding: 6px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      border: 1px solid var(--primary-soft-2);
+    }
+
+    [data-theme="dark"] .status-pill {
+      color: var(--primary-2);
+    }
+
+    .status-pill .dot-live {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 8px var(--glow);
+      animation: blink 1.6s ease-in-out infinite;
+    }
+
+    .status-pill.offline {
+      background: var(--c-red-bg);
+      border-color: transparent;
+      color: var(--c-red-fg);
+    }
+
+    .status-pill.offline .dot-live {
+      background: var(--c-red-fg);
+      box-shadow: 0 0 8px var(--c-red-fg);
+    }
+
+    .theme-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-strong);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      color: var(--text);
+      font-size: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.3s;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    }
+
+    .theme-toggle:hover {
+      transform: rotate(20deg) scale(1.08);
+      border-color: var(--primary);
+    }
+
+    .theme-toggle:active { transform: scale(0.92); }
+
+    /* SEGMENTED */
+    .segmented {
+      display: flex;
+      background: var(--card-2);
+      border-radius: 14px;
+      padding: 4px;
+      margin-bottom: 22px;
+      position: relative;
+      z-index: 2;
+      border: 1px solid var(--border);
+    }
+
+    .segmented button {
+      flex: 1;
+      padding: 11px;
+      border: none;
+      background: transparent;
+      color: var(--text-2);
+      font-size: 13.5px;
+      font-weight: 700;
+      border-radius: 11px;
+      cursor: pointer;
+      transition: 0.3s;
+      font-family: inherit;
+    }
+
+    .segmented button.active {
+      background: linear-gradient(145deg, var(--primary-2), var(--primary));
+      color: #fff;
+      box-shadow:
+        0 4px 16px var(--glow),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    /* FORM STEPS */
+    .form-step {
+      display: none;
+      animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      z-index: 2;
+    }
+
+    .form-step.active { display: block; }
+
+    /* LINKS */
+    .link {
+      color: var(--primary);
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: 0.2s;
+    }
+
+    .link:hover {
+      color: var(--primary-2);
+      text-shadow: 0 0 12px var(--glow);
+    }
+
+    .helper {
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 16px;
+      font-weight: 500;
+    }
+
+    .forgot {
+      text-align: right;
+      margin-top: -4px;
+      margin-bottom: 14px;
+    }
+
+    /* ALERTA */
+    .alert {
+      padding: 13px 16px;
+      border-radius: 15px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+      font-weight: 700;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      position: relative;
+      z-index: 2;
+    }
+
+    .alert.show { display: block; animation: fadeIn 0.3s ease; }
+
+    .alert.error {
+      background: var(--c-red-bg);
+      color: var(--c-red-fg);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+    }
+
+    .alert.success {
+      background: var(--c-green-bg);
+      color: var(--c-green-fg);
+      border: 1px solid rgba(0, 163, 82, 0.2);
+    }
+
+    /* AVISO ALUNO */
+    .aviso-aluno {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 15px;
+      background: var(--primary-soft);
+      border: 1px solid var(--primary-soft-2);
+      margin-bottom: 18px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .aviso-aluno .ico {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--primary-2), var(--primary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px var(--glow);
+    }
+
+    .aviso-aluno .txt { flex: 1; min-width: 0; }
+
+    .aviso-aluno .txt strong {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--primary-deep);
+      display: block;
+      letter-spacing: -0.2px;
+    }
+
+    [data-theme="dark"] .aviso-aluno .txt strong { color: var(--primary-2); }
+
+    .aviso-aluno .txt span {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 2px;
+      display: block;
+      line-height: 1.35;
+    }
+
+    /* AJUSTES DO BOTÃO */
+    .btn-block { width: 100%; padding: 16px; font-size: 15.5px; }
+
+    /* RESPONSIVO */
+    @media (max-width: 400px) {
+      .row { grid-template-columns: 1fr; gap: 0; }
+      .auth-card { padding: 24px 18px; border-radius: 26px; }
+      .brand h1 { font-size: 24px; }
+      .brand-logo { width: 72px; height: 72px; }
+      .brand-logo svg { width: 40px; height: 40px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       FUNDO ANIMADO
+  ============================================================ -->
+  <div class="bg-layer">
+    <div class="aura aura-1"></div>
+    <div class="aura aura-2"></div>
+    <div class="aura aura-3"></div>
+
+    <svg class="bg-rays" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="rayGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#00e676" stop-opacity="0.4" />
+          <stop offset="100%" stop-color="#00e676" stop-opacity="0" />
+        </radialGradient>
+      </defs>
+      <g stroke="url(#rayGrad)" stroke-width="1.5" fill="none">
+        <line x1="500" y1="500" x2="0" y2="0" />
+        <line x1="500" y1="500" x2="250" y2="0" />
+        <line x1="500" y1="500" x2="500" y2="0" />
+        <line x1="500" y1="500" x2="750" y2="0" />
+        <line x1="500" y1="500" x2="1000" y2="0" />
+        <line x1="500" y1="500" x2="0" y2="250" />
+        <line x1="500" y1="500" x2="1000" y2="250" />
+        <line x1="500" y1="500" x2="0" y2="500" />
+        <line x1="500" y1="500" x2="1000" y2="500" />
+        <line x1="500" y1="500" x2="0" y2="750" />
+        <line x1="500" y1="500" x2="1000" y2="750" />
+        <line x1="500" y1="500" x2="0" y2="1000" />
+        <line x1="500" y1="500" x2="250" y2="1000" />
+        <line x1="500" y1="500" x2="500" y2="1000" />
+        <line x1="500" y1="500" x2="750" y2="1000" />
+        <line x1="500" y1="500" x2="1000" y2="1000" />
+      </g>
+      <g stroke="url(#rayGrad)" stroke-width="1" fill="none" opacity="0.6">
+        <circle cx="500" cy="500" r="120" />
+        <circle cx="500" cy="500" r="220" />
+        <circle cx="500" cy="500" r="320" />
+        <circle cx="500" cy="500" r="420" />
+      </g>
+    </svg>
+
+    <div class="bg-grid"></div>
+    <div class="particles" id="particles"></div>
+  </div>
+
+  <!-- ============================================================
+       AUTH
+  ============================================================ -->
+  <div class="auth">
+
+    <!-- BRAND -->
+    <div class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13 2L4.5 13.5H11L10 22L19.5 9.5H12.5L13 2Z" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1>Triad Academia</h1>
+      <p>Plataforma de evolução</p>
+    </div>
+
+    <!-- CARD -->
+    <div class="auth-card">
+
+      <div class="card-top">
+        <span class="status-pill" id="statusPill">
+          <span class="dot-live"></span>
+          <span id="statusText">Online</span>
+        </span>
+        <button class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+          <span id="themeIcon">🌙</span>
+        </button>
+      </div>
+
+      <!-- ALERTA -->
+      <div id="alert" class="alert"></div>
+
+      <!-- SEGMENTED -->
+      <div class="segmented" id="segmented">
+        <button class="active" data-tab="login" onclick="switchTab('login')">Entrar</button>
+        <button data-tab="cadastro" onclick="switchTab('cadastro')">Criar conta</button>
+      </div>
+
+      <!-- ===================== LOGIN ===================== -->
+      <form class="form-step active" id="step-login" onsubmit="return false;">
+        <div class="field">
+          <label for="login-email">E-mail</label>
+          <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email" />
+        </div>
+
+        <div class="field">
+          <label for="login-senha">Senha</label>
+          <input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+
+        <div class="forgot">
+          <span class="link" onclick="showStep('recuperar')">Esqueci minha senha</span>
+        </div>
+
+        <button class="btn btn-primary btn-block" onclick="fazerLogin(event)">Entrar</button>
+
+        <p class="helper">
+          Não tem conta? <span class="link" onclick="switchTab('cadastro')">Criar agora</span>
+        </p>
+      </form>
+
+      <!-- ===================== CADASTRO ===================== -->
+      <form class="form-step" id="step-cadastro" onsubmit="return false;">
+
+        <div class="aviso-aluno">
+          <div class="ico">🎓</div>
+          <div class="txt">
+            <strong>Cadastro de aluno</strong>
+            <span>Funcionários são cadastrados pela recepção da academia.</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="cad-nome">Nome completo</label>
+          <input type="text" id="cad-nome" placeholder="João Pereira" autocomplete="name" />
+        </div>
+
+        <div class="field">
+          <label for="cad-email">E-mail</label>
+          <input type="email" id="cad-email" placeholder="seu@email.com" autocomplete="email" />
+        </div>
+
+        <div class="field">
+          <label for="cad-telefone">Telefone</label>
+          <input type="tel" id="cad-telefone" placeholder="(00) 00000-0000" autocomplete="tel" oninput="mascaraTelefone(this)" />
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="cad-senha">Senha</label>
+            <input type="password" id="cad-senha" placeholder="••••••••" autocomplete="new-password" />
+          </div>
+          <div class="field">
+            <label for="cad-confirma">Confirmar</label>
+            <input type="password" id="cad-confirma" placeholder="••••••••" autocomplete="new-password" />
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" onclick="fazerCadastro(event)">Criar conta</button>
+
+        <p class="helper">
+          Já tem conta? <span class="link" onclick="switchTab('login')">Entrar</span>
+        </p>
+      </form>
+
+      <!-- ===================== RECUPERAR ===================== -->
+      <form class="form-step" id="step-recuperar" onsubmit="return false;">
+        <div class="field">
+          <label for="rec-email">E-mail cadastrado</label>
+          <input type="email" id="rec-email" placeholder="seu@email.com" autocomplete="email" />
+        </div>
+
+        <button class="btn btn-primary btn-block" onclick="recuperarSenha(event)">Enviar link</button>
+        <button class="btn btn-ghost btn-block" onclick="showStep('login')">← Voltar para o login</button>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCRIPTS
+  ============================================================ -->
+  <script src="assets/salvarBD.js"></script>
+  <script src="assets/script.js"></script>
+  <script src="assets/auth.js"></script>
+
+  <script>
+    /* ============================================================
+       PARTÍCULAS
+    ============================================================ */
+    (function createParticles() {
+      const container = document.getElementById('particles');
+      for (let i = 0; i < 22; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.left = Math.random() * 100 + '%';
+        p.style.animationDuration = (8 + Math.random() * 12) + 's';
+        p.style.animationDelay = (Math.random() * 10) + 's';
+        p.style.width = p.style.height = (2 + Math.random() * 4) + 'px';
+        container.appendChild(p);
+      }
+    })();
+
+    /* ============================================================
+       NAVEGAÇÃO ENTRE STEPS
+    ============================================================ */
+    function showStep(step) {
+      document.querySelectorAll('.form-step').forEach(el => el.classList.remove('active'));
+      const el = document.getElementById('step-' + step);
+      if (el) el.classList.add('active');
+
+      document.querySelectorAll('.segmented button').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === step);
+      });
+
+      hideAlert();
+    }
+
+    function switchTab(tab) {
+      showStep(tab);
+    }
+
+    /* ============================================================
+       ALERTAS (inline do card — não é toast)
+    ============================================================ */
+    function showAlert(msg, type = 'error') {
+      const el = document.getElementById('alert');
+      el.textContent = msg;
+      el.className = 'alert show ' + type;
+      clearTimeout(el._timer);
+      el._timer = setTimeout(hideAlert, 4500);
+    }
+
+    function hideAlert() {
+      const el = document.getElementById('alert');
+      el.className = 'alert';
+      el.textContent = '';
+    }
+
+    /* ============================================================
+       HELPERS
+    ============================================================ */
+    function val(id) { return document.getElementById(id).value.trim(); }
+
+    function isEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+
+    function limpar(ids) {
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+    }
+
+    function setLoading(btn, ativo) {
+      if (!btn) return;
+      if (ativo) {
+        btn.dataset.original = btn.textContent;
+        btn.textContent = 'Aguarde...';
+        btn.disabled = true;
+      } else {
+        btn.textContent = btn.dataset.original || 'Enviar';
+        btn.disabled = false;
+      }
+    }
+
+    function setStatus(texto, tipo = 'ok') {
+      const st = document.getElementById('statusText');
+      const pill = document.getElementById('statusPill');
+      st.textContent = texto;
+      pill.classList.toggle('offline', tipo === 'offline');
+    }
+
+    /* ============================================================
+       LOGIN
+    ============================================================ */
+    async function fazerLogin(ev) {
+      const btn = ev?.target;
+      const email = val('login-email');
+      const senha = val('login-senha');
+
+      if (!email || !senha) return showAlert('Preencha e-mail e senha.');
+      if (!isEmail(email)) return showAlert('E-mail inválido.');
+
+      setLoading(btn, true);
+      try {
+        const usuario = await BD.login(email, senha);
+
+        localStorage.setItem('triad_usuario', JSON.stringify(usuario));
+        showAlert(`Bem-vindo, ${usuario.dadosPessoais?.nome?.split(' ')[0] || 'aluno'}!`, 'success');
+
+        // Redireciona conforme perfil e estado
+        setTimeout(() => {
+          if (usuario.perfil === 'funcionario') {
+            window.location.href = 'admin.html';
+            return;
+          }
+          const perfilCompleto = !!(usuario.dadosFisicos && usuario.objetivos);
+          window.location.href = perfilCompleto ? 'home.html' : 'onboarding.html';
+        }, 900);
+
+      } catch (err) {
+        const msg = err.response?.data?.erro || 'Erro ao conectar com o servidor.';
+        showAlert(msg, 'error');
+      } finally {
+        setLoading(btn, false);
+      }
+    }
+
+    /* ============================================================
+       CADASTRO (SÓ ALUNO)
+    ============================================================ */
+    async function fazerCadastro(ev) {
+      const btn = ev?.target;
+      const nome = val('cad-nome');
+      const email = val('cad-email');
+      const telefone = val('cad-telefone');
+      const senha = val('cad-senha');
+      const confirma = val('cad-confirma');
+
+      if (!nome || !email || !senha || !confirma) return showAlert('Preencha os campos obrigatórios.');
+      if (!isEmail(email)) return showAlert('E-mail inválido.');
+      if (senha.length < 6) return showAlert('Senha deve ter 6+ caracteres.');
+      if (senha !== confirma) return showAlert('As senhas não conferem.');
+
+      setLoading(btn, true);
+      try {
+        const usuario = await BD.cadastro({ nome, email, telefone, senha });
+        localStorage.setItem('triad_usuario', JSON.stringify(usuario));
+        showAlert('Conta criada! Vamos completar seu perfil...', 'success');
+        limpar(['cad-nome', 'cad-email', 'cad-telefone', 'cad-senha', 'cad-confirma']);
+
+        setTimeout(() => {
+          window.location.href = 'onboarding.html';
+        }, 1000);
+
+      } catch (err) {
+        const msg = err.response?.data?.erro || 'Erro ao criar conta.';
+        showAlert(msg, 'error');
+      } finally {
+        setLoading(btn, false);
+      }
+    }
+
+    /* ============================================================
+       RECUPERAR SENHA
+    ============================================================ */
+    async function recuperarSenha(ev) {
+      const btn = ev?.target;
+      const email = val('rec-email');
+      if (!email) return showAlert('Informe seu e-mail.');
+      if (!isEmail(email)) return showAlert('E-mail inválido.');
+
+      setLoading(btn, true);
+      try {
+        await BD.recuperarSenha(email);
+        showAlert('Se o e-mail existir, enviaremos o link.', 'success');
+        limpar(['rec-email']);
+      } catch (err) {
+        showAlert(err.response?.data?.erro || 'Erro ao solicitar recuperação.', 'error');
+      } finally {
+        setLoading(btn, false);
+      }
+    }
+
+    /* ============================================================
+       ENTER
+    ============================================================ */
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const active = document.querySelector('.form-step.active');
+      if (!active) return;
+      const btn = active.querySelector('.btn-primary');
+
+      if (active.id === 'step-login') fazerLogin({ target: btn });
+      if (active.id === 'step-cadastro') fazerCadastro({ target: btn });
+      if (active.id === 'step-recuperar') recuperarSenha({ target: btn });
+    });
+
+    /* ============================================================
+       HEALTH CHECK
+    ============================================================ */
+    (async () => {
+      try {
+        await BD.health();
+        setStatus('Online', 'ok');
+      } catch {
+        setStatus('Offline', 'offline');
+        console.warn('⚠️ Servidor offline — verifique se `node server.js` está rodando.');
+      }
+    })();
+
+    /* ============================================================
+       SE JÁ ESTIVER LOGADO → REDIRECIONA
+    ============================================================ */
+    (function verificarSessao() {
+      const salvo = localStorage.getItem('triad_usuario');
+      if (!salvo) return;
+
+      try {
+        const u = JSON.parse(salvo);
+        if (!u?.id) return;
+
+        if (u.perfil === 'funcionario') {
+          window.location.href = 'admin.html';
+          return;
+        }
+
+        const perfilCompleto = !!(u.dadosFisicos && u.objetivos);
+        window.location.href = perfilCompleto ? 'home.html' : 'onboarding.html';
+      } catch {}
+    })();
+  </script>
+</body>
+</html>
