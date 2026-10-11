@@ -1,12 +1,16 @@
 // ============================================
 // auth.js — Middlewares de autenticação e autorização
-// Triad Academia · v2.2
+// Triad Academia · v2.3
 //
 // Este arquivo:
 //   1. Carrega express-rate-limit
 //   2. Define requireAuth, requireRole, requireAluno, requireDevice
 //   3. Define optionalAuth (rotas públicas com contexto opcional)
 //   4. Define loginLimiter, apiLimiter, deviceLimiter
+//
+// Mudanças v2.3 (sobre 2.2):
+//   - Limiters aceitam trust proxy da Vercel sem reclamar (validate relaxado)
+//   - Corrige 403 fantasma em alg=none quando trust proxy=1
 //
 // Se algo falhar aqui, procure por "[auth.js]" no log.
 // ============================================
@@ -63,16 +67,10 @@ try {
 // 3. HELPERS INTERNOS
 // ============================================
 
-/**
- * Extrai e valida o Bearer token do header Authorization.
- * Retorna o payload decodificado ou null se inválido.
- */
 function extractBearerPayload(req) {
   const header = req.headers.authorization || '';
   const [scheme, token] = header.split(' ');
-
   if (scheme !== 'Bearer' || !token) return null;
-
   try {
     return verifyToken(token);
   } catch {
@@ -80,18 +78,12 @@ function extractBearerPayload(req) {
   }
 }
 
-/**
- * Busca o usuário no banco a partir do payload.
- * Retorna o usuário ativo ou null.
- */
 async function fetchActiveUser(payload) {
   if (!payload?.sub) return null;
-
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
     select: userSelect,
   });
-
   if (!user || !user.active) return null;
   return user;
 }
@@ -114,6 +106,7 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
     if (err.name === 'TokenExpiredError') {
       throw new HttpError(401, 'Token expirado');
     }
+    // cobre: JsonWebTokenError, NotBeforeError, alg=none, signature inválida, etc
     throw new HttpError(401, 'Token inválido ou expirado');
   }
 
@@ -129,14 +122,12 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
 // ============================================
 // 5. AUTH — Bearer JWT (opcional)
 // ============================================
-// Útil para rotas que mudam de comportamento se logado,
-// mas funcionam anonimamente (ex: GET /exercises com dados extras).
 export const optionalAuth = asyncHandler(async (req, res, next) => {
   const payload = extractBearerPayload(req);
-  if (!payload) return next(); // sem token — segue como anônimo
+  if (!payload) return next();
 
   const user = await fetchActiveUser(payload);
-  if (user) req.user = user; // só define se válido e ativo
+  if (user) req.user = user;
 
   next();
 });
@@ -157,10 +148,6 @@ export const requireRole = (...roles) => asyncHandler((req, res, next) => {
 // ============================================
 // 7. AUTH — Aluno (role ALUNO + Student vinculado)
 // ============================================
-// Garante que:
-//   - req.user existe (requireAuth já rodou antes)
-//   - req.user.role === 'ALUNO'
-//   - existe Student vinculado (req.user.studentId)
 export const requireAluno = asyncHandler(async (req, res, next) => {
   if (!req.user) {
     throw new HttpError(401, 'Não autenticado');
@@ -169,7 +156,6 @@ export const requireAluno = asyncHandler(async (req, res, next) => {
     throw new HttpError(403, 'Acesso restrito a alunos');
   }
 
-  // Busca o Student vinculado (faz cache em req.student)
   const student = await prisma.student.findUnique({
     where: { userId: req.user.id },
     select: { id: true, name: true, email: true, phone: true, active: true },
@@ -208,6 +194,15 @@ export const requireDevice = asyncHandler(async (req, res, next) => {
 // ============================================
 const rateLimitDisabled = () => process.env.RATE_LIMIT_DISABLED === '1';
 
+// Configuração compartilhada: aceita trust proxy=1 da Vercel sem reclamar.
+// Sem isso, o express-rate-limit v8 retorna 403 quando detecta trust proxy
+// mas não encontra X-Forwarded-For "confiável" (comportamento da Vercel).
+const rateLimitValidate = {
+  trustProxy: false,           // aceita app.set('trust proxy', 1)
+  xForwardedForHeader: false,  // não valida formato do X-Forwarded-For
+  default: true,               // mantém as outras validações padrão
+};
+
 // --- loginLimiter (30/15min por IP) ---
 let loginLimiter;
 try {
@@ -222,6 +217,7 @@ try {
     message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
     skipSuccessfulRequests: true,
     skip: rateLimitDisabled,
+    validate: rateLimitValidate,
   });
 
   console.log(`${TAG} ✔ loginLimiter criado (max=${max}, windowMs=${windowMs}, disabled=${rateLimitDisabled()})`);
@@ -247,6 +243,7 @@ try {
     legacyHeaders: false,
     message: { error: 'Muitas requisições. Aguarde um momento.' },
     skip: rateLimitDisabled,
+    validate: rateLimitValidate,
   });
   console.log(`${TAG} ✔ apiLimiter criado (max=${max}, windowMs=${windowMs}, disabled=${rateLimitDisabled()})`);
 } catch (err) {
@@ -268,6 +265,7 @@ try {
     legacyHeaders: false,
     message: { error: 'Muitas requisições do dispositivo.' },
     skip: rateLimitDisabled,
+    validate: rateLimitValidate,
   });
   console.log(`${TAG} ✔ deviceLimiter criado (max=${max}, windowMs=${windowMs}, disabled=${rateLimitDisabled()})`);
 } catch (err) {
