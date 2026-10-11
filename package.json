@@ -18,6 +18,9 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "bugs": {
     "url": "https://github.com/jpereiraolidev/triadacademia.treino/issues"
   },
@@ -28,6 +31,7 @@
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "argon2": "^0.45.1",
+    "axios": "^1.20.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.7",
     "express": "^5.2.1",

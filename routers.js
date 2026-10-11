@@ -1,11 +1,17 @@
 // ============================================
 // routers.js — Todas as rotas /api/v1
-// Triad Academia · v2.2
+// Triad Academia · v2.3
 //
 // Este arquivo:
 //   1. Importa express, config.js e auth.js
 //   2. Registra TODAS as rotas em /api/v1
 //   3. Exporta o router
+//
+// Mudanças v2.3 (sobre 2.2):
+//   - Importa safeQuery de ./prisma.js
+//   - Rotas GET de leitura usam safeQuery (retry contra pooler zumbi)
+//   - Rota POST /auth/login usa safeQuery na findUnique do user
+//   - Transações e rotas de escrita NÃO usam safeQuery (por design)
 //
 // Se algo falhar aqui, procure por "[routers.js]" no log.
 // ============================================
@@ -56,6 +62,22 @@ try {
   console.log(`${TAG} ✔ config.js carregado (todos os ${required.length} exports presentes)`);
 } catch (err) {
   console.error(`${TAG} 💥 Falha ao importar './config.js'`);
+  console.error(`${TAG}    Detalhe: ${err.message}`);
+  process.exit(1);
+}
+
+// ← NOVO (v2.3): importa safeQuery direto de ./prisma.js
+let safeQuery;
+try {
+  const prismaMod = await import('./prisma.js');
+  safeQuery = prismaMod.safeQuery;
+  if (typeof safeQuery !== 'function') {
+    console.error(`${TAG} 💥 ./prisma.js não exportou 'safeQuery'.`);
+    process.exit(1);
+  }
+  console.log(`${TAG} ✔ safeQuery importado de ./prisma.js`);
+} catch (err) {
+  console.error(`${TAG} 💥 Falha ao importar './prisma.js'`);
   console.error(`${TAG}    Detalhe: ${err.message}`);
   process.exit(1);
 }
@@ -116,7 +138,11 @@ router.post(
   asyncHandler(async (req, res) => {
     const { email, password } = req.validated;
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    // ← NOVO (v2.3): safeQuery na findUnique (primeira query da request)
+    const user = await safeQuery(
+      () => prisma.user.findUnique({ where: { email } }),
+      'auth.login.findUser'
+    );
     if (!user || !user.active) throw new HttpError(401, 'Credenciais inválidas');
 
     const ok = await verifyPassword(user.password, password);
@@ -149,10 +175,14 @@ router.get(
   '/users',
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
-    const users = await prisma.user.findMany({
-      select: userSelect,
-      orderBy: { name: 'asc' },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const users = await safeQuery(
+      () => prisma.user.findMany({
+        select: userSelect,
+        orderBy: { name: 'asc' },
+      }),
+      'users.list'
+    );
     res.json(users);
   })
 );
@@ -235,10 +265,14 @@ router.get(
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (muscleGroup) where.muscleGroup = muscleGroup;
     if (active !== undefined) where.active = active === 'true';
-    const exercises = await prisma.exercise.findMany({
-      where,
-      orderBy: { name: 'asc' },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const exercises = await safeQuery(
+      () => prisma.exercise.findMany({
+        where,
+        orderBy: { name: 'asc' },
+      }),
+      'exercises.list'
+    );
     res.json(exercises);
   })
 );
@@ -305,10 +339,14 @@ router.get(
     const where = {};
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (active !== undefined) where.active = active === 'true';
-    const students = await prisma.student.findMany({
-      where,
-      orderBy: { name: 'asc' },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const students = await safeQuery(
+      () => prisma.student.findMany({
+        where,
+        orderBy: { name: 'asc' },
+      }),
+      'students.list'
+    );
     res.json(students);
   })
 );
@@ -318,15 +356,19 @@ router.get(
   '/students/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const student = await prisma.student.findUnique({
-      where: { id: req.params.id },
-      include: {
-        memberships: {
-          include: { plan: true },
-          orderBy: { startDate: 'desc' },
+    // ← NOVO (v2.3): safeQuery
+    const student = await safeQuery(
+      () => prisma.student.findUnique({
+        where: { id: req.params.id },
+        include: {
+          memberships: {
+            include: { plan: true },
+            orderBy: { startDate: 'desc' },
+          },
         },
-      },
-    });
+      }),
+      'students.getById'
+    );
     if (!student) throw new HttpError(404, 'Aluno não encontrado');
     res.json(student);
   })
@@ -394,10 +436,14 @@ router.get(
     const { active } = req.query;
     const where = {};
     if (active !== undefined) where.active = active === 'true';
-    const plans = await prisma.plan.findMany({
-      where,
-      orderBy: { name: 'asc' },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const plans = await safeQuery(
+      () => prisma.plan.findMany({
+        where,
+        orderBy: { name: 'asc' },
+      }),
+      'plans.list'
+    );
     res.json(plans);
   })
 );
@@ -407,7 +453,11 @@ router.get(
   '/plans/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const plan = await prisma.plan.findUnique({ where: { id: req.params.id } });
+    // ← NOVO (v2.3): safeQuery
+    const plan = await safeQuery(
+      () => prisma.plan.findUnique({ where: { id: req.params.id } }),
+      'plans.getById'
+    );
     if (!plan) throw new HttpError(404, 'Plano não encontrado');
     res.json(plan);
   })
@@ -465,14 +515,18 @@ router.get(
     if (studentId) where.studentId = studentId;
     if (status) where.status = status;
     if (active === 'true') where.endDate = { gte: new Date() };
-    const memberships = await prisma.membership.findMany({
-      where,
-      include: {
-        student: { select: { id: true, name: true, email: true } },
-        plan: { select: { id: true, name: true, price: true, durationDays: true } },
-      },
-      orderBy: { startDate: 'desc' },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const memberships = await safeQuery(
+      () => prisma.membership.findMany({
+        where,
+        include: {
+          student: { select: { id: true, name: true, email: true } },
+          plan: { select: { id: true, name: true, price: true, durationDays: true } },
+        },
+        orderBy: { startDate: 'desc' },
+      }),
+      'memberships.list'
+    );
     res.json(memberships);
   })
 );
@@ -482,10 +536,14 @@ router.get(
   '/memberships/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const m = await prisma.membership.findUnique({
-      where: { id: req.params.id },
-      include: { student: true, plan: true },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const m = await safeQuery(
+      () => prisma.membership.findUnique({
+        where: { id: req.params.id },
+        include: { student: true, plan: true },
+      }),
+      'memberships.getById'
+    );
     if (!m) throw new HttpError(404, 'Matrícula não encontrada');
     res.json(m);
   })
@@ -572,13 +630,17 @@ router.get(
   '/devices',
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
-    const devices = await prisma.device.findMany({
-      select: {
-        id: true, name: true, identifier: true, active: true,
-        createdAt: true, updatedAt: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const devices = await safeQuery(
+      () => prisma.device.findMany({
+        select: {
+          id: true, name: true, identifier: true, active: true,
+          createdAt: true, updatedAt: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
+      'devices.list'
+    );
     res.json(devices);
   })
 );
@@ -593,7 +655,7 @@ router.post(
     const exists = await prisma.device.findUnique({ where: { identifier } });
     if (exists) throw new HttpError(409, 'Identificador já cadastrado');
     const rawKey = generateDeviceKey();
-    const apiKeyHash = hashDeviceKey(rawKey);  // ← agora do destructuring
+    const apiKeyHash = hashDeviceKey(rawKey);
     const device = await prisma.device.create({
       data: { name, identifier, apiKeyHash, ...(active !== undefined && { active }) },
       select: { id: true, name: true, identifier: true, active: true, createdAt: true },
@@ -636,7 +698,7 @@ router.post(
     const existing = await prisma.device.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Device não encontrado');
     const rawKey = generateDeviceKey();
-    const apiKeyHash = hashDeviceKey(rawKey);  // ← agora do destructuring
+    const apiKeyHash = hashDeviceKey(rawKey);
     await prisma.device.update({ where: { id }, data: { apiKeyHash } });
     res.json({
       id,
@@ -767,16 +829,20 @@ router.get(
       if (to) where.createdAt.lte = to;
     }
     const take = Math.min(limit ?? 100, 500);
-    const checkins = await prisma.checkin.findMany({
-      where,
-      include: {
-        student: { select: { id: true, name: true } },
-        device: { select: { id: true, name: true } },
-        registeredUser: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take,
-    });
+    // ← NOVO (v2.3): safeQuery
+    const checkins = await safeQuery(
+      () => prisma.checkin.findMany({
+        where,
+        include: {
+          student: { select: { id: true, name: true } },
+          device: { select: { id: true, name: true } },
+          registeredUser: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take,
+      }),
+      'checkins.list'
+    );
     res.json(checkins);
   })
 );
@@ -787,10 +853,14 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const { studentId } = req.params;
-    const last = await prisma.checkin.findFirst({
-      where: { studentId },
-      orderBy: { createdAt: 'desc' },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const last = await safeQuery(
+      () => prisma.checkin.findFirst({
+        where: { studentId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      'checkins.lastByStudent'
+    );
     res.json(last || null);
   })
 );
@@ -806,21 +876,29 @@ router.get(
   asyncHandler(async (req, res) => {
     const { studentId } = req.params;
     const { status } = req.query;
-    const student = await prisma.student.findUnique({ where: { id: studentId } });
+    // ← NOVO (v2.3): safeQuery
+    const student = await safeQuery(
+      () => prisma.student.findUnique({ where: { id: studentId } }),
+      'workouts.findStudent'
+    );
     if (!student) throw new HttpError(404, 'Aluno não encontrado');
     const where = { studentId };
     if (status) where.status = status;
-    const workouts = await prisma.workoutPlan.findMany({
-      where,
-      include: {
-        exercises: {
-          include: { exercise: true },
-          orderBy: { order: 'asc' },
+    // ← NOVO (v2.3): safeQuery
+    const workouts = await safeQuery(
+      () => prisma.workoutPlan.findMany({
+        where,
+        include: {
+          exercises: {
+            include: { exercise: true },
+            orderBy: { order: 'asc' },
+          },
+          creator: { select: { id: true, name: true } },
         },
-        creator: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+      'workouts.listByStudent'
+    );
     res.json(workouts);
   })
 );
@@ -886,14 +964,18 @@ router.get(
   '/workouts/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const workout = await prisma.workoutPlan.findUnique({
-      where: { id: req.params.id },
-      include: {
-        exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
-        student: { select: { id: true, name: true, email: true } },
-        creator: { select: { id: true, name: true, email: true } },
-      },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const workout = await safeQuery(
+      () => prisma.workoutPlan.findUnique({
+        where: { id: req.params.id },
+        include: {
+          exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
+          student: { select: { id: true, name: true, email: true } },
+          creator: { select: { id: true, name: true, email: true } },
+        },
+      }),
+      'workouts.getById'
+    );
     if (!workout) throw new HttpError(404, 'Treino não encontrado');
     res.json(workout);
   })
@@ -1019,22 +1101,30 @@ router.get(
     const { studentId } = req.params;
     const { exerciseId } = req.query;
 
-    const student = await prisma.student.findUnique({ where: { id: studentId } });
+    // ← NOVO (v2.3): safeQuery
+    const student = await safeQuery(
+      () => prisma.student.findUnique({ where: { id: studentId } }),
+      'evolution.findStudent'
+    );
     if (!student) throw new HttpError(404, 'Aluno não encontrado');
 
     const where = { workout: { studentId } };
     if (exerciseId) where.exerciseId = exerciseId;
 
-    const records = await prisma.workoutExercise.findMany({
-      where,
-      include: {
-        exercise: true,
-        workout: {
-          select: { id: true, name: true, startDate: true, status: true },
+    // ← NOVO (v2.3): safeQuery
+    const records = await safeQuery(
+      () => prisma.workoutExercise.findMany({
+        where,
+        include: {
+          exercise: true,
+          workout: {
+            select: { id: true, name: true, startDate: true, status: true },
+          },
         },
-      },
-      orderBy: { workout: { startDate: 'asc' } },
-    });
+        orderBy: { workout: { startDate: 'asc' } },
+      }),
+      'evolution.listRecords'
+    );
 
     const evolution = records.reduce((acc, record) => {
       const key = record.exerciseId;
@@ -1169,14 +1259,18 @@ router.get(
       status: status || 'PENDING',
       expiresAt: { gt: new Date() },
     };
-    const invites = await prisma.invite.findMany({
-      where,
-      take: Math.min(Number(limit) || 100, 500),
-      orderBy: { createdAt: 'asc' },
-      include: {
-        student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
-      },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const invites = await safeQuery(
+      () => prisma.invite.findMany({
+        where,
+        take: Math.min(Number(limit) || 100, 500),
+        orderBy: { createdAt: 'asc' },
+        include: {
+          student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
+        },
+      }),
+      'invites.listPending'
+    );
     res.json({
       total: invites.length,
       invites: invites.map((i) => ({
@@ -1200,12 +1294,16 @@ router.get(
     const { token } = req.params;
     if (!token || typeof token !== 'string') throw new HttpError(400, 'Token inválido');
 
-    const invite = await prisma.invite.findUnique({
-      where: { token },
-      include: {
-        student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
-      },
-    });
+    // ← NOVO (v2.3): safeQuery
+    const invite = await safeQuery(
+      () => prisma.invite.findUnique({
+        where: { token },
+        include: {
+          student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
+        },
+      }),
+      'invites.getByToken'
+    );
 
     if (!invite) throw new HttpError(404, 'Convite inválido');
     if (invite.status === 'REVOKED') throw new HttpError(400, 'Convite cancelado');

@@ -1,6 +1,6 @@
 // ============================================
 // auth.js — Middlewares de autenticação e autorização
-// Triad Academia · v2.3
+// Triad Academia · v2.4
 //
 // Este arquivo:
 //   1. Carrega express-rate-limit
@@ -8,9 +8,9 @@
 //   3. Define optionalAuth (rotas públicas com contexto opcional)
 //   4. Define loginLimiter, apiLimiter, deviceLimiter
 //
-// Mudanças v2.3 (sobre 2.2):
-//   - Limiters aceitam trust proxy da Vercel sem reclamar (validate relaxado)
-//   - Corrige 403 fantasma em alg=none quando trust proxy=1
+// Mudanças v2.4 (sobre 2.3):
+//   - fetchActiveUser agora usa safeQuery (retry contra pooler zumbi)
+//   - Importa safeQuery direto de ./prisma.js
 //
 // Se algo falhar aqui, procure por "[auth.js]" no log.
 // ============================================
@@ -42,6 +42,26 @@ const {
   prisma, userSelect, HttpError, asyncHandler,
   verifyToken, hashDeviceKey,
 } = config;
+
+// ============================================
+// 1b. IMPORTAR safeQuery de ./prisma.js
+// ============================================
+// safeQuery NÃO é re-exportado pelo config.js (decisão intencional).
+// Quem quer retry em query importa direto de ./prisma.js.
+let safeQuery;
+try {
+  const prismaMod = await import('./prisma.js');
+  safeQuery = prismaMod.safeQuery;
+  if (typeof safeQuery !== 'function') {
+    console.error(`${TAG} 💥 ./prisma.js não exportou 'safeQuery'.`);
+    process.exit(1);
+  }
+  console.log(`${TAG} ✔ safeQuery importado de ./prisma.js`);
+} catch (err) {
+  console.error(`${TAG} 💥 Falha ao importar './prisma.js'`);
+  console.error(`${TAG}    Detalhe: ${err.message}`);
+  process.exit(1);
+}
 
 // ============================================
 // 2. IMPORTAR EXPRESS-RATE-LIMIT
@@ -78,12 +98,20 @@ function extractBearerPayload(req) {
   }
 }
 
+/**
+ * Busca o usuário ativo no banco.
+ * v2.4: usa safeQuery para ganhar retry contra o pooler zumbi
+ * (PrimeDB/Prisma Postgres trava a primeira query após ociosidade).
+ */
 async function fetchActiveUser(payload) {
   if (!payload?.sub) return null;
-  const user = await prisma.user.findUnique({
-    where: { id: payload.sub },
-    select: userSelect,
-  });
+  const user = await safeQuery(
+    () => prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: userSelect,
+    }),
+    'auth.fetchActiveUser'
+  );
   if (!user || !user.active) return null;
   return user;
 }
@@ -156,10 +184,13 @@ export const requireAluno = asyncHandler(async (req, res, next) => {
     throw new HttpError(403, 'Acesso restrito a alunos');
   }
 
-  const student = await prisma.student.findUnique({
-    where: { userId: req.user.id },
-    select: { id: true, name: true, email: true, phone: true, active: true },
-  });
+  const student = await safeQuery(
+    () => prisma.student.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, name: true, email: true, phone: true, active: true },
+    }),
+    'auth.requireAluno.findStudent'
+  );
 
   if (!student || !student.active) {
     throw new HttpError(403, 'Conta de aluno inativa ou não vinculada');
@@ -179,7 +210,10 @@ export const requireDevice = asyncHandler(async (req, res, next) => {
   }
 
   const hash = hashDeviceKey(rawKey);
-  const device = await prisma.device.findUnique({ where: { apiKeyHash: hash } });
+  const device = await safeQuery(
+    () => prisma.device.findUnique({ where: { apiKeyHash: hash } }),
+    'auth.requireDevice.findDevice'
+  );
 
   if (!device || !device.active) {
     throw new HttpError(401, 'Device inválido ou inativo');

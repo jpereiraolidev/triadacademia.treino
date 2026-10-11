@@ -1,14 +1,18 @@
 // ============================================
 // api.js — Bootstrap do servidor
-// Triad Academia · v2.2
+// Triad Academia · v2.3
 //
 // Este arquivo:
 //   1. Importa config.js, auth.js, routers.js
 //   2. Monta o app Express
-//   3. Aplica middlewares globais
+//   3. Aplica middlewares globais (incluindo warm-up do banco)
 //   4. Monta /api/v1
 //   5. Registra 404 e error handler
 //   6. Inicia o servidor
+//
+// Mudanças v2.3 (sobre 2.2):
+//   - Middleware de warm-up global (SELECT 1 fire-and-forget)
+//   - /health?warm=1 opcional para diagnóstico
 //
 // Se algo falhar aqui, procure por "[api.js]" no log.
 // ============================================
@@ -19,6 +23,7 @@ console.log(`${TAG} ▶ carregando...`);
 // ---------- IMPORTS (protegidos) ----------
 let express, cors, helmet;
 let config, auth, router;
+let warmupDb;
 
 try {
   express = (await import('express')).default;
@@ -43,6 +48,21 @@ try {
   console.log(`${TAG} ✔ helmet carregado`);
 } catch (err) {
   console.error(`${TAG} 💥 Falha ao importar 'helmet'. Verifique: npm install helmet`);
+  console.error(`${TAG}    Detalhe: ${err.message}`);
+  process.exit(1);
+}
+
+// ---------- prisma.js (para warmupDb) ----------
+try {
+  const prismaMod = await import('./prisma.js');
+  warmupDb = prismaMod.warmupDb;
+  if (typeof warmupDb !== 'function') {
+    console.error(`${TAG} 💥 ./prisma.js não exportou 'warmupDb'.`);
+    process.exit(1);
+  }
+  console.log(`${TAG} ✔ warmupDb importado de ./prisma.js`);
+} catch (err) {
+  console.error(`${TAG} 💥 Falha ao importar './prisma.js'`);
   console.error(`${TAG}    Detalhe: ${err.message}`);
   process.exit(1);
 }
@@ -164,11 +184,52 @@ try {
   process.exit(1);
 }
 
+// ============================================
+// WARM-UP GLOBAL DO BANCO (v2.3)
+// ============================================
+// Roda SELECT 1 em background para acordar a conexão com o banco
+// antes que a primeira query real chegue.
+//
+// Por que fire-and-forget:
+//   - Não bloqueia a request (zero latência adicionada no caso quente)
+//   - No caso frio, o warm-up paga o preço do cold start em paralelo
+//   - Com connection_limit=1, a query real compartilha a conexão
+//
+// O health check fica de fora (não queremos que o ping da Vercel
+// acorde o banco a cada 30s).
+// ============================================
+app.use(async (req, res, next) => {
+  if (req.path === '/health') return next();
+
+  // Fire-and-forget: não espera, não bloqueia, não propaga erro
+  warmupDb(3000).catch((err) => {
+    // warmupDb já loga internamente; aqui é só para não vazar Promise
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`${TAG} ⚠ warmupDb background falhou: ${err.message}`);
+    }
+  });
+
+  next();
+});
+console.log(`${TAG} ✔ middleware de warm-up aplicado (fire-and-forget, timeout=3000ms)`);
+
 // ---------- /health ----------
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  // Por padrão, /health NÃO toca no banco (rápido, para o ping da Vercel).
+  // Com ?warm=1, faz SELECT 1 para diagnóstico.
+  if (req.query.warm === '1') {
+    const t0 = Date.now();
+    const result = await warmupDb(5000);
+    const ms = Date.now() - t0;
+    return res.json({
+      status: result.ok ? 'ok' : 'degraded',
+      warmup: { ok: result.ok, ms, error: result.error || null },
+      timestamp: new Date().toISOString(),
+    });
+  }
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-console.log(`${TAG} ✔ rota /health registrada`);
+console.log(`${TAG} ✔ rota /health registrada (com ?warm=1 opcional)`);
 
 // ---------- /api/v1 ----------
 app.use('/api/v1', router);
@@ -246,6 +307,7 @@ if (!process.env.VERCEL) {
     console.log(`🚀 Triad Academia API`);
     console.log(`   URL    : http://localhost:${PORT}`);
     console.log(`   Health : http://localhost:${PORT}/health`);
+    console.log(`   Health+: http://localhost:${PORT}/health?warm=1`);
     console.log(`   Base   : http://localhost:${PORT}/api/v1`);
     console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
     console.log(`   INVITE : ${config.APP_URL}${config.INVITE_PATH}/<token>`);

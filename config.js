@@ -1,15 +1,20 @@
 // ============================================
 // config.js — Configuração compartilhada
-// Triad Academia · v2.2
+// Triad Academia · v2.3
 //
 // Este arquivo:
 //   1. Carrega .env
-//   2. Cria o PrismaClient (singleton)
+//   2. Importa o prisma de ./prisma.js (re-exporta)
 //   3. Exporta JWT_SECRET, PORT, INVITE_SECRET e constantes
 //   4. Exporta helpers (HttpError, asyncHandler, validate)
 //   5. Exporta funções de auth (hash, verify, sign, verifyToken)
 //   6. Exporta helpers de convite (id, nonce, hmac, url)
 //   7. Exporta todos os schemas Zod
+//
+// Mudanças v2.3 (sobre v2.2):
+//   - PrismaClient foi movido para ./prisma.js
+//   - Aqui só re-exportamos `prisma` para manter compatibilidade
+//   - connection_limit=1 + retry agora vivem no prisma.js
 //
 // Se algo falhar aqui, procure por "[config.js]" no log.
 // ============================================
@@ -33,7 +38,7 @@ try {
 // ============================================
 // 2. DEPENDÊNCIAS
 // ============================================
-let z, argon2, jwt, crypto, PrismaClient;
+let z, argon2, jwt, crypto;
 try {
   z = (await import('zod')).z;
   console.log(`${TAG} ✔ zod carregado`);
@@ -67,40 +72,30 @@ try {
   console.error(`${TAG}    Detalhe: ${err.message}`);
   process.exit(1);
 }
-try {
-  const prismaMod = await import('@prisma/client');
-  PrismaClient = prismaMod.PrismaClient;
-  if (typeof PrismaClient !== 'function') {
-    console.error(`${TAG} 💥 '@prisma/client' não exportou PrismaClient.`);
-    console.error(`${TAG}    Rode: npx prisma generate`);
-    process.exit(1);
-  }
-  console.log(`${TAG} ✔ @prisma/client carregado`);
-} catch (err) {
-  console.error(`${TAG} 💥 Falha ao importar '@prisma/client'.`);
-  console.error(`${TAG}    Causa provável: Prisma Client não foi gerado.`);
-  console.error(`${TAG}    Rode: npx prisma generate`);
-  console.error(`${TAG}    Detalhe: ${err.message}`);
-  process.exit(1);
-}
 
 // ============================================
-// 3. PRISMA (singleton)
+// 3. PRISMA (agora vem de ./prisma.js)
 // ============================================
+// O PrismaClient foi movido para ./prisma.js, que agora é
+// responsável por:
+//   - Singleton global
+//   - connection_limit=1 na URL (serverless)
+//   - safeQuery() com retry + backoff (contra pooler zumbi)
+//   - warmupDb() para acordar a conexão
+//
+// Aqui só re-exportamos para manter compatibilidade com
+// quem importa `prisma` de `./config.js` (auth.js, api.js, routers.js).
 let prisma;
 try {
-  const globalForPrisma = globalThis;
-  prisma =
-    globalForPrisma.prisma ??
-    new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-    });
-  if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
-  console.log(`${TAG} ✔ PrismaClient criado (singleton)`);
+  const prismaMod = await import('./prisma.js');
+  prisma = prismaMod.prisma;
+  if (!prisma) {
+    console.error(`${TAG} 💥 ./prisma.js não exportou 'prisma'.`);
+    process.exit(1);
+  }
+  console.log(`${TAG} ✔ prisma re-exportado de ./prisma.js`);
 } catch (err) {
-  console.error(`${TAG} 💥 Falha ao criar PrismaClient.`);
-  console.error(`${TAG}    Causa provável: DATABASE_URL inválida, .env ausente, ou Prisma Client não gerado.`);
-  console.error(`${TAG}    Rode: npx prisma generate`);
+  console.error(`${TAG} 💥 Falha ao importar './prisma.js'.`);
   console.error(`${TAG}    Detalhe: ${err.message}`);
   process.exit(1);
 }
@@ -113,7 +108,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const DEVICE_KEY_PEPPER = process.env.DEVICE_KEY_PEPPER || '';
 const PORT = Number(process.env.PORT || 3333);
 
-// --- INVITE (nova) ---
+// --- INVITE ---
 const INVITE_SECRET = process.env.INVITE_SECRET;
 const APP_URL = (process.env.APP_URL || 'https://triadacademiatreino.vercel.app').replace(/\/+$/, '');
 const INVITE_PATH = process.env.INVITE_PATH || '/i';
