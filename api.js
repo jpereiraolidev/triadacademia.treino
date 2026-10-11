@@ -1,6 +1,6 @@
 // ============================================
 // api.js — Bootstrap do servidor
-// Triad Academia · v2.1 (logs de diagnóstico)
+// Triad Academia · v2.2
 //
 // Este arquivo:
 //   1. Importa config.js, auth.js, routers.js
@@ -50,14 +50,17 @@ try {
 // ---------- config.js ----------
 try {
   config = await import('./config.js');
-  const required = ['prisma', 'PORT', 'redactForLog', 'HttpError'];
+  const required = [
+    'prisma', 'PORT', 'redactForLog', 'HttpError',
+    'INVITE_SECRET', 'APP_URL', 'INVITE_PATH',
+  ];
   const missing = required.filter((k) => config[k] === undefined);
   if (missing.length) {
     console.error(`${TAG} 💥 config.js carregou, mas não exportou: ${missing.join(', ')}`);
     console.error(`${TAG}    Verifique se config.js está completo.`);
     process.exit(1);
   }
-  console.log(`${TAG} ✔ config.js carregado (prisma, PORT=${config.PORT}, HttpError)`);
+  console.log(`${TAG} ✔ config.js carregado (prisma, PORT=${config.PORT}, HttpError, INVITE_SECRET)`);
 } catch (err) {
   console.error(`${TAG} 💥 Falha ao importar './config.js'`);
   console.error(`${TAG}    Causa provável: config.js não existe, tem erro de sintaxe,`);
@@ -69,7 +72,10 @@ try {
 // ---------- auth.js ----------
 try {
   auth = await import('./auth.js');
-  const required = ['requireAuth', 'requireRole', 'requireDevice', 'apiLimiter', 'loginLimiter', 'deviceLimiter'];
+  const required = [
+    'requireAuth', 'requireRole', 'requireAluno', 'requireDevice',
+    'apiLimiter', 'loginLimiter', 'deviceLimiter',
+  ];
   const missing = required.filter((k) => auth[k] === undefined);
   if (missing.length) {
     console.error(`${TAG} 💥 auth.js carregou, mas não exportou: ${missing.join(', ')}`);
@@ -77,7 +83,7 @@ try {
     console.error(`${TAG}    npm install express-rate-limit`);
     process.exit(1);
   }
-  console.log(`${TAG} ✔ auth.js carregado (requireAuth, requireRole, requireDevice, limiters)`);
+  console.log(`${TAG} ✔ auth.js carregado (requireAuth, requireRole, requireAluno, requireDevice, limiters)`);
 } catch (err) {
   console.error(`${TAG} 💥 Falha ao importar './auth.js'`);
   console.error(`${TAG}    Causa provável: auth.js não existe, tem erro de sintaxe,`);
@@ -126,6 +132,11 @@ process.on('unhandledRejection', (err) => {
 // ============================================
 const app = express();
 console.log(`${TAG} ✔ app criado`);
+
+// Vercel roda atrás de proxy reverso — confiar em X-Forwarded-For
+// Sem isso, express-rate-limit conta o IP interno do proxy, não o do cliente.
+app.set('trust proxy', 1);
+console.log(`${TAG} ✔ trust proxy aplicado`);
 
 app.disable('x-powered-by');
 app.use(helmet());
@@ -228,8 +239,6 @@ console.log(`${TAG} ✔ error handler registrado`);
 // ============================================
 // START (apenas fora da Vercel)
 // ============================================
-// A variável VERCEL é injetada automaticamente pela plataforma.
-// Localmente ela não existe, então o servidor sobe normalmente.
 if (!process.env.VERCEL) {
   const server = app.listen(PORT, () => {
     console.log('');
@@ -239,6 +248,7 @@ if (!process.env.VERCEL) {
     console.log(`   Health : http://localhost:${PORT}/health`);
     console.log(`   Base   : http://localhost:${PORT}/api/v1`);
     console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
+    console.log(`   INVITE : ${config.APP_URL}${config.INVITE_PATH}/<token>`);
     console.log(`   RATE_LIMIT_DISABLED: ${process.env.RATE_LIMIT_DISABLED || '0'}`);
     console.log(`   LOGIN_RATE_MAX: ${process.env.LOGIN_RATE_MAX || '30 (default)'}`);
     console.log('============================================================');
@@ -248,7 +258,7 @@ if (!process.env.VERCEL) {
   server.ref();
 
   // ============================================
-  // GRACEFUL SHUTDOWN (só faz sentido com servidor local)
+  // GRACEFUL SHUTDOWN
   // ============================================
   let shuttingDown = false;
   function shutdown(signal) {
@@ -274,6 +284,4 @@ if (!process.env.VERCEL) {
 // ============================================
 // EXPORT PARA VERCEL (Serverless Function)
 // ============================================
-// Em ESM usamos `export default`, NÃO `module.exports`.
-// A Vercel importa este app e o executa como handler HTTP.
 export default app;

@@ -19,6 +19,7 @@ enum UserRole {
   ADMIN
   PROFESSOR
   RECEPCAO
+  ALUNO       // ← contas de aluno vindas de convite
 }
 
 enum WorkoutStatus {
@@ -44,6 +45,21 @@ enum CheckinStatus {
   NEGADO
 }
 
+// ← tipos de convite
+enum InviteType {
+  ALUNO       // recadastro de aluno legado
+  STAFF       // convite para funcionário
+}
+
+// ← ciclo de vida do convite
+enum InviteStatus {
+  PENDING     // criado, aguardando envio
+  SENT        // mensagem enviada
+  ACCEPTED    // aceito — conta criada
+  REVOKED     // cancelado pelo admin
+  EXPIRED     // prazo estourou
+}
+
 // ============================================
 // USER
 // ============================================
@@ -59,11 +75,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // relações existentes
   createdWorkouts WorkoutPlan[] @relation("WorkoutCreator")
   checkins        Checkin[]     @relation("CheckinRegisteredBy")
 
+  // vínculo com Student (1:1 opcional — quando role = ALUNO)
+  // Este lado NÃO tem FK — o Student é quem aponta pra cá
+  student Student? @relation("UserStudent")
+
+  // convites criados por este usuário (admin)
+  invitesCreated Invite[] @relation("InviteCreatedBy")
+
+  // convites aceitos por este usuário
+  invitesAccepted Invite[] @relation("InviteAcceptedBy")
+
   @@index([email])
   @@index([active])
+  @@index([role, active])
 }
 
 // ============================================
@@ -76,17 +104,34 @@ model Student {
   phone     String?   @db.VarChar(20)
   birthDate DateTime?
 
+  // rastreamento do sistema legado (migração)
+  legacyId   String? @unique @db.VarChar(80)
+  legacyData Json?
+
+  // FK para User (1:1 opcional — preenchida quando o aluno se recadastra)
+  // Este lado CARREGA a foreign key
+  userId String? @unique
+
   active Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // relações existentes
   workoutPlans WorkoutPlan[]
   memberships  Membership[]
   checkins     Checkin[]
 
+  // relação 1:1 com User (com fields/references explícitos)
+  user User? @relation("UserStudent", fields: [userId], references: [id], onDelete: SetNull)
+
+  // convites apontando para este aluno
+  invites Invite[]
+
   @@index([name])
   @@index([active])
+  @@index([legacyId])
+  @@index([userId])
 }
 
 // ============================================
@@ -198,9 +243,9 @@ model Checkin {
 // ============================================
 model Exercise {
   id          String  @id @default(cuid())
-  name        String  @db.VarChar(255)   // ← 255
+  name        String  @db.VarChar(255)
   description String? @db.Text
-  muscleGroup String? @db.VarChar(255)   // ← 255 também
+  muscleGroup String? @db.VarChar(255)
   videoUrl    String? @db.VarChar(500)
 
   active Boolean @default(true)
@@ -268,4 +313,66 @@ model WorkoutExercise {
 
   @@index([workoutId])
   @@index([exerciseId])
+}
+
+// ============================================
+// INVITE — Versão B1 (compacto)
+// ============================================
+// Estrutura do token: <id>.<hmac>
+//   - id:   12 bytes aleatórios → base64url → 16 chars  (@id)
+//   - hmac: HMAC-SHA256(id + exp + nonce) truncado em 10 bytes → base64url → 14 chars
+//   - token completo: ~31 chars
+//   - URL final: https://app/i/<token>  →  ~64 chars
+// ============================================
+model Invite {
+  id String @id @db.VarChar(16)
+
+  // Token completo = id + "." + hmac (guardado para lookup rápido)
+  token String @unique @db.VarChar(40)
+
+  // HMAC isolado (útil para auditoria/debug)
+  hmac String @db.VarChar(14)
+
+  // Quem criou (admin)
+  createdById String
+
+  // Vínculo com aluno legado (opcional — só quando type=ALUNO)
+  studentId String?
+
+  // Alvo — para envio e matching
+  email String? @db.VarChar(160)
+  phone String? @db.VarChar(20)
+  name  String? @db.VarChar(120)
+
+  // O que será criado ao aceitar
+  type InviteType
+  role UserRole?  // só quando type=STAFF
+
+  // Ciclo de vida
+  status    InviteStatus @default(PENDING)
+  expiresAt DateTime
+
+  // Tracking de envio
+  sentAt       DateTime?
+  sentVia      String? @db.VarChar(20)   // "whatsapp" | "sms" | "email"
+  reminderSent Int     @default(0)
+
+  // Auditoria
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  acceptedAt   DateTime?
+  acceptedById String?
+
+  // Relações
+  createdBy  User     @relation("InviteCreatedBy",  fields: [createdById],  references: [id], onDelete: Restrict)
+  acceptedBy User?    @relation("InviteAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  student    Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([token])
+  @@index([studentId])
+  @@index([email])
+  @@index([phone])
+  @@index([status, expiresAt])
+  @@index([status, sentAt])
+  @@index([createdById])
 }

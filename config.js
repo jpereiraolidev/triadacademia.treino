@@ -1,14 +1,15 @@
 // ============================================
 // config.js — Configuração compartilhada
-// Triad Academia · v2.1 (logs de diagnóstico)
+// Triad Academia · v2.2
 //
 // Este arquivo:
 //   1. Carrega .env
 //   2. Cria o PrismaClient (singleton)
-//   3. Exporta JWT_SECRET, PORT e constantes
+//   3. Exporta JWT_SECRET, PORT, INVITE_SECRET e constantes
 //   4. Exporta helpers (HttpError, asyncHandler, validate)
 //   5. Exporta funções de auth (hash, verify, sign, verifyToken)
-//   6. Exporta todos os schemas Zod
+//   6. Exporta helpers de convite (id, nonce, hmac, url)
+//   7. Exporta todos os schemas Zod
 //
 // Se algo falhar aqui, procure por "[config.js]" no log.
 // ============================================
@@ -108,33 +109,47 @@ try {
 // 4. VARIÁVEIS DE AMBIENTE
 // ============================================
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const DEVICE_KEY_PEPPER = process.env.DEVICE_KEY_PEPPER || '';
 const PORT = Number(process.env.PORT || 3333);
 
+// --- INVITE (nova) ---
+const INVITE_SECRET = process.env.INVITE_SECRET;
+const APP_URL = (process.env.APP_URL || 'https://triadacademiatreino.vercel.app').replace(/\/+$/, '');
+const INVITE_PATH = process.env.INVITE_PATH || '/i';
+
 if (!JWT_SECRET) {
   console.error(`${TAG} 💥 JWT_SECRET não definido no .env.`);
-  console.error(`${TAG}    Gere um segredo com:`);
-  console.error(`${TAG}    node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`);
+  console.error(`${TAG}    Gere com: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`);
   process.exit(1);
 }
 if (JWT_SECRET.length < 32) {
-  console.error(`${TAG} 💥 JWT_SECRET muito curto (${JWT_SECRET.length} chars).`);
-  console.error(`${TAG}    Exigido: >= 32 chars. Atual: ${JWT_SECRET.length}.`);
+  console.error(`${TAG} 💥 JWT_SECRET muito curto (${JWT_SECRET.length} chars). Mínimo: 32.`);
   process.exit(1);
 }
 console.log(`${TAG} ✔ JWT_SECRET ok (${JWT_SECRET.length} chars, expira em ${JWT_EXPIRES_IN})`);
 
 if (!DEVICE_KEY_PEPPER) {
   console.warn(`${TAG} ⚠ DEVICE_KEY_PEPPER vazio — chaves de device ficam sem pepper.`);
-  console.warn(`${TAG}    Recomendado: adicionar um segredo longo no .env.`);
 } else {
   console.log(`${TAG} ✔ DEVICE_KEY_PEPPER ok (${DEVICE_KEY_PEPPER.length} chars)`);
 }
 
+if (!INVITE_SECRET) {
+  console.error(`${TAG} 💥 INVITE_SECRET não definido no .env.`);
+  console.error(`${TAG}    Gere com: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`);
+  process.exit(1);
+}
+if (INVITE_SECRET.length < 32) {
+  console.error(`${TAG} 💥 INVITE_SECRET muito curto (${INVITE_SECRET.length} chars). Mínimo: 32.`);
+  process.exit(1);
+}
+console.log(`${TAG} ✔ INVITE_SECRET ok (${INVITE_SECRET.length} chars)`);
+console.log(`${TAG} ✔ APP_URL=${APP_URL}`);
+console.log(`${TAG} ✔ INVITE_PATH=${INVITE_PATH}`);
+
 console.log(`${TAG} ✔ PORT=${PORT}`);
 
-// Log da URL do banco (mascarada) — ajuda a diagnosticar P1001/P2024
 if (process.env.DATABASE_URL) {
   const masked = process.env.DATABASE_URL.replace(/(:\/\/[^:]+:)[^@]+@/, '$1****@');
   console.log(`${TAG} ✔ DATABASE_URL: ${masked}`);
@@ -227,7 +242,38 @@ export function verifyToken(token) {
 }
 
 // ============================================
-// 7. LOG — sanitização
+// 7. INVITE — helpers (Versão B1)
+// ============================================
+// Formato do token: <id>.<hmac>
+//   - id:   12 bytes → base64url → 16 chars
+//   - hmac: HMAC-SHA256(id + ":" + exp + ":" + nonce) truncado em 10 bytes → base64url → 14 chars
+//   - token completo: ~31 chars
+// ============================================
+
+export function generateInviteId() {
+  return crypto.randomBytes(12).toString('base64url'); // 16 chars
+}
+
+export function generateInviteNonce() {
+  return crypto.randomBytes(4).toString('hex'); // 8 chars
+}
+
+export function signInvite({ id, exp, nonce }) {
+  const payload = `${id}:${exp}:${nonce}`;
+  return crypto
+    .createHmac('sha256', INVITE_SECRET)
+    .update(payload)
+    .digest()
+    .subarray(0, 10)              // 10 bytes
+    .toString('base64url');        // 14 chars
+}
+
+export function buildInviteUrl(token) {
+  return `${APP_URL}${INVITE_PATH}/${token}`;
+}
+
+// ============================================
+// 8. LOG — sanitização
 // ============================================
 export function redactForLog(obj, depth = 0) {
   if (depth > 5 || obj == null) return obj;
@@ -238,7 +284,8 @@ export function redactForLog(obj, depth = 0) {
     const lk = k.toLowerCase();
     if (lk.includes('password') || lk.includes('token') ||
         lk.includes('authorization') || lk.includes('apikey') ||
-        lk.includes('api_key') || lk.includes('secret') || lk.includes('cookie')) {
+        lk.includes('api_key') || lk.includes('secret') || lk.includes('cookie') ||
+        lk.includes('hmac')) {
       out[k] = '[REDACTED]';
     } else {
       out[k] = redactForLog(v, depth + 1);
@@ -248,7 +295,7 @@ export function redactForLog(obj, depth = 0) {
 }
 
 // ============================================
-// 8. SCHEMAS (Zod) — todos com .strict()
+// 9. SCHEMAS (Zod) — todos com .strict()
 // ============================================
 let schemas;
 try {
@@ -396,8 +443,60 @@ try {
       restSeconds: z.number().int().nonnegative().max(3600).nullish(),
       notes: z.string().max(1000).nullish(),
     }).strict(),
+
+    // ============================================
+    // INVITE schemas (v2.2)
+    // ============================================
+    inviteCreateSchema: z.object({
+      studentId: z.string().min(1).optional(),
+      email: emailSchema.optional(),
+      phone: phoneSchema.optional(),
+      name: z.string().trim().min(1).max(120).optional(),
+      type: z.enum(['ALUNO', 'STAFF']).default('ALUNO'),
+      role: z.enum(['ADMIN', 'PROFESSOR', 'RECEPCAO']).optional(),
+      expiresInDays: z.number().int().min(1).max(90).default(30),
+    }).strict(),
+
+    inviteBulkSchema: z.object({
+      invites: z.array(
+        z.object({
+          studentId: z.string().min(1).optional(),
+          email: emailSchema.optional(),
+          phone: phoneSchema.optional(),
+          name: z.string().trim().min(1).max(120).optional(),
+          type: z.enum(['ALUNO', 'STAFF']).default('ALUNO'),
+          role: z.enum(['ADMIN', 'PROFESSOR', 'RECEPCAO']).optional(),
+        }).strict()
+      ).min(1).max(500),
+      expiresInDays: z.number().int().min(1).max(90).default(30),
+    }).strict(),
+
+    inviteAcceptSchema: z.object({
+      password: z.string().min(8, 'Senha mínima de 8 caracteres').max(100),
+      email: emailSchema.optional(),
+    }).strict(),
+
+    inviteMarkSentSchema: z.object({
+      via: z.enum(['whatsapp', 'sms', 'email']),
+    }).strict(),
+
+    // ============================================
+    // STUDENT IMPORT (v2.2)
+    // ============================================
+    studentImportSchema: z.object({
+      students: z.array(
+        z.object({
+          legacyId: z.string().trim().min(1).max(80),
+          name: z.string().trim().min(1).max(120),
+          email: emailSchema.optional().nullable(),
+          phone: phoneSchema.optional().nullable(),
+          birthDate: z.coerce.date().optional().nullable(),
+        }).strict()
+      ).min(1).max(1000),
+    }).strict(),
   };
 
+  // derivados (partial)
   schemas.exerciseUpdateSchema = schemas.exerciseCreateSchema.partial();
   schemas.studentUpdateSchema = schemas.studentCreateSchema.partial();
   schemas.planUpdateSchema = schemas.planCreateSchema.partial();
@@ -415,9 +514,19 @@ try {
 }
 
 // ============================================
-// 9. EXPORTS
+// 10. EXPORTS
 // ============================================
-export { prisma, JWT_SECRET, JWT_EXPIRES_IN, DEVICE_KEY_PEPPER, PORT };
+export {
+  prisma,
+  JWT_SECRET,
+  JWT_EXPIRES_IN,
+  DEVICE_KEY_PEPPER,
+  PORT,
+  INVITE_SECRET,
+  APP_URL,
+  INVITE_PATH,
+};
+
 export const {
   loginSchema,
   userCreateSchema,
@@ -440,6 +549,11 @@ export const {
   workoutUpdateSchema,
   workoutExerciseCreateSchema,
   workoutExerciseUpdateSchema,
+  inviteCreateSchema,
+  inviteBulkSchema,
+  inviteAcceptSchema,
+  inviteMarkSentSchema,
+  studentImportSchema,
 } = schemas;
 
 console.log(`${TAG} ✅ carregado com sucesso`);

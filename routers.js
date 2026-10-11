@@ -1,6 +1,6 @@
 // ============================================
 // routers.js — Todas as rotas /api/v1
-// Triad Academia · v2.1 (logs de diagnóstico)
+// Triad Academia · v2.2
 //
 // Este arquivo:
 //   1. Importa express, config.js e auth.js
@@ -31,7 +31,7 @@ try {
   config = await import('./config.js');
   const required = [
     'prisma', 'asyncHandler', 'validate', 'HttpError',
-    'hashPassword', 'verifyPassword', 'signToken', 'generateDeviceKey',
+    'hashPassword', 'verifyPassword', 'signToken', 'generateDeviceKey', 'hashDeviceKey',
     'userSelect',
     'loginSchema', 'userCreateSchema', 'userUpdateSchema', 'userPasswordSchema',
     'exerciseCreateSchema', 'exerciseUpdateSchema',
@@ -42,6 +42,10 @@ try {
     'checkinCreateSchema', 'checkinManualSchema', 'checkinQuerySchema',
     'workoutCreateSchema', 'workoutUpdateSchema',
     'workoutExerciseCreateSchema', 'workoutExerciseUpdateSchema',
+    // novos (v2.2)
+    'inviteCreateSchema', 'inviteBulkSchema', 'inviteAcceptSchema',
+    'inviteMarkSentSchema', 'studentImportSchema',
+    'generateInviteId', 'generateInviteNonce', 'signInvite', 'buildInviteUrl',
   ];
   const missing = required.filter((k) => config[k] === undefined);
   if (missing.length) {
@@ -59,14 +63,14 @@ try {
 let auth;
 try {
   auth = await import('./auth.js');
-  const required = ['requireAuth', 'requireRole', 'requireDevice', 'loginLimiter', 'deviceLimiter'];
+  const required = ['requireAuth', 'requireRole', 'requireAluno', 'requireDevice', 'loginLimiter', 'deviceLimiter'];
   const missing = required.filter((k) => auth[k] === undefined);
   if (missing.length) {
     console.error(`${TAG} 💥 auth.js não exportou: ${missing.join(', ')}`);
     console.error(`${TAG}    Verifique se auth.js está completo e salvo.`);
     process.exit(1);
   }
-  console.log(`${TAG} ✔ auth.js carregado (requireAuth, requireRole, requireDevice, loginLimiter, deviceLimiter)`);
+  console.log(`${TAG} ✔ auth.js carregado (requireAuth, requireRole, requireAluno, requireDevice, loginLimiter, deviceLimiter)`);
 } catch (err) {
   console.error(`${TAG} 💥 Falha ao importar './auth.js'`);
   console.error(`${TAG}    Detalhe: ${err.message}`);
@@ -75,7 +79,7 @@ try {
 
 const {
   prisma, asyncHandler, validate, HttpError,
-  hashPassword, verifyPassword, signToken, generateDeviceKey,
+  hashPassword, verifyPassword, signToken, generateDeviceKey, hashDeviceKey,
   userSelect,
   loginSchema, userCreateSchema, userUpdateSchema, userPasswordSchema,
   exerciseCreateSchema, exerciseUpdateSchema,
@@ -86,10 +90,14 @@ const {
   checkinCreateSchema, checkinManualSchema, checkinQuerySchema,
   workoutCreateSchema, workoutUpdateSchema,
   workoutExerciseCreateSchema, workoutExerciseUpdateSchema,
+  // novos (v2.2)
+  inviteCreateSchema, inviteBulkSchema, inviteAcceptSchema,
+  inviteMarkSentSchema, studentImportSchema,
+  generateInviteId, generateInviteNonce, signInvite, buildInviteUrl,
 } = config;
 
 const {
-  requireAuth, requireRole, requireDevice,
+  requireAuth, requireRole, requireAluno, requireDevice,
   loginLimiter, deviceLimiter,
 } = auth;
 
@@ -103,7 +111,7 @@ function countRoute() { routeCount++; }
 
 router.post(
   '/auth/login',
-  loginLimiter,                    // 🔥 ESTA LINHA É OBRIGATÓRIA
+  loginLimiter,
   validate(loginSchema),
   asyncHandler(async (req, res) => {
     const { email, password } = req.validated;
@@ -117,7 +125,7 @@ router.post(
     const token = signToken(user);
     res.json({
       token,
-      expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       user: { ...user, password: undefined },
     });
   })
@@ -585,7 +593,7 @@ router.post(
     const exists = await prisma.device.findUnique({ where: { identifier } });
     if (exists) throw new HttpError(409, 'Identificador já cadastrado');
     const rawKey = generateDeviceKey();
-    const apiKeyHash = require_hashDeviceKey(rawKey);
+    const apiKeyHash = hashDeviceKey(rawKey);  // ← agora do destructuring
     const device = await prisma.device.create({
       data: { name, identifier, apiKeyHash, ...(active !== undefined && { active }) },
       select: { id: true, name: true, identifier: true, active: true, createdAt: true },
@@ -628,7 +636,7 @@ router.post(
     const existing = await prisma.device.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Device não encontrado');
     const rawKey = generateDeviceKey();
-    const apiKeyHash = require_hashDeviceKey(rawKey);
+    const apiKeyHash = hashDeviceKey(rawKey);  // ← agora do destructuring
     await prisma.device.update({ where: { id }, data: { apiKeyHash } });
     res.json({
       id,
@@ -651,9 +659,6 @@ router.delete(
   })
 );
 countRoute();
-
-// Import tardio do hashDeviceKey (evita duplicação no topo)
-import { hashDeviceKey as require_hashDeviceKey } from './config.js';
 
 // ============================================
 // 9. ROTAS — CHECKINS
@@ -1061,7 +1066,318 @@ router.get(
 countRoute();
 
 // ============================================
-// 12. EXPORT
+// 12. ROTAS — INVITES (v2.2)
+// ============================================
+
+/**
+ * Helper interno: cria 1 Invite no banco.
+ * Não faz validação de role — quem chama deve garantir.
+ */
+async function createInvite({ studentId, email, phone, name, type, role, expiresInDays, createdById }) {
+  const id = generateInviteId();
+  const nonce = generateInviteNonce();
+  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+  const exp = Math.floor(expiresAt.getTime() / 1000);
+
+  const hmac = signInvite({ id, exp, nonce });
+  const token = `${id}.${hmac}`;
+
+  const invite = await prisma.invite.create({
+    data: {
+      id,
+      token,
+      hmac,
+      createdById,
+      studentId: studentId ?? null,
+      email: email ?? null,
+      phone: phone ?? null,
+      name: name ?? null,
+      type,
+      role: role ?? null,
+      expiresAt,
+    },
+    include: {
+      student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
+    },
+  });
+
+  return { invite, token, url: buildInviteUrl(token), expiresAt };
+}
+
+router.post(
+  '/invites',
+  requireAuth, requireRole('ADMIN'),
+  validate(inviteCreateSchema),
+  asyncHandler(async (req, res) => {
+    const { studentId, email, phone, name, type, role, expiresInDays } = req.validated;
+
+    if (studentId) {
+      const student = await prisma.student.findUnique({ where: { id: studentId } });
+      if (!student) throw new HttpError(404, 'Aluno não encontrado');
+      if (student.userId) throw new HttpError(409, 'Aluno já possui conta ativa');
+    }
+    if (type === 'STAFF' && !role) {
+      throw new HttpError(400, 'role é obrigatório para convites de STAFF');
+    }
+
+    const { invite, token, url } = await createInvite({
+      studentId, email, phone, name, type, role, expiresInDays,
+      createdById: req.user.id,
+    });
+
+    res.status(201).json({ invite, token, url });
+  })
+);
+countRoute();
+
+router.post(
+  '/invites/bulk',
+  requireAuth, requireRole('ADMIN'),
+  validate(inviteBulkSchema),
+  asyncHandler(async (req, res) => {
+    const { invites, expiresInDays } = req.validated;
+
+    const results = [];
+    for (const item of invites) {
+      if (item.type === 'STAFF' && !item.role) {
+        throw new HttpError(400, 'role é obrigatório para convites de STAFF');
+      }
+      const r = await createInvite({
+        studentId: item.studentId,
+        email: item.email,
+        phone: item.phone,
+        name: item.name,
+        type: item.type,
+        role: item.role,
+        expiresInDays,
+        createdById: req.user.id,
+      });
+      results.push({ invite: r.invite, token: r.token, url: r.url });
+    }
+
+    res.status(201).json({ created: results.length, invites: results });
+  })
+);
+countRoute();
+
+router.get(
+  '/invites/pending',
+  requireAuth, requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    const { status, limit } = req.query;
+    const where = {
+      status: status || 'PENDING',
+      expiresAt: { gt: new Date() },
+    };
+    const invites = await prisma.invite.findMany({
+      where,
+      take: Math.min(Number(limit) || 100, 500),
+      orderBy: { createdAt: 'asc' },
+      include: {
+        student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
+      },
+    });
+    res.json({
+      total: invites.length,
+      invites: invites.map((i) => ({
+        id: i.id,
+        token: i.token,
+        url: buildInviteUrl(i.token),
+        name: i.name || i.student?.name || null,
+        email: i.email || i.student?.email || null,
+        phone: i.phone || i.student?.phone || null,
+        expiresAt: i.expiresAt,
+        status: i.status,
+      })),
+    });
+  })
+);
+countRoute();
+
+router.get(
+  '/invites/:token',
+  asyncHandler(async (req, res) => {
+    const { token } = req.params;
+    if (!token || typeof token !== 'string') throw new HttpError(400, 'Token inválido');
+
+    const invite = await prisma.invite.findUnique({
+      where: { token },
+      include: {
+        student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
+      },
+    });
+
+    if (!invite) throw new HttpError(404, 'Convite inválido');
+    if (invite.status === 'REVOKED') throw new HttpError(400, 'Convite cancelado');
+    if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já utilizado');
+    if (invite.expiresAt < new Date()) {
+      await prisma.invite.update({
+        where: { id: invite.id },
+        data: { status: 'EXPIRED' },
+      }).catch(() => {});
+      throw new HttpError(400, 'Convite expirado');
+    }
+
+    res.json({
+      valid: true,
+      invite: {
+        id: invite.id,
+        type: invite.type,
+        expiresAt: invite.expiresAt,
+        name: invite.student?.name || invite.name || null,
+        email: invite.student?.email || invite.email || null,
+        phone: invite.student?.phone || invite.phone || null,
+        legacyId: invite.student?.legacyId || null,
+        needsEmail: !(invite.student?.email || invite.email),
+      },
+    });
+  })
+);
+countRoute();
+
+router.post(
+  '/invites/:token/accept',
+  loginLimiter,
+  validate(inviteAcceptSchema),
+  asyncHandler(async (req, res) => {
+    const { token } = req.params;
+    const { password, email: emailInput } = req.validated;
+
+    const invite = await prisma.invite.findUnique({
+      where: { token },
+      include: { student: true },
+    });
+
+    if (!invite) throw new HttpError(404, 'Convite inválido');
+    if (invite.status === 'REVOKED') throw new HttpError(400, 'Convite cancelado');
+    if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já utilizado');
+    if (invite.expiresAt < new Date()) throw new HttpError(400, 'Convite expirado');
+
+    const email = invite.student?.email || invite.email || emailInput;
+    if (!email) throw new HttpError(400, 'Email é obrigatório para criar a conta');
+
+    const exists = await prisma.user.findUnique({ where: { email } });
+    if (exists) throw new HttpError(409, 'Email já cadastrado');
+
+    const hash = await hashPassword(password);
+
+    const user = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          name: invite.student?.name || invite.name || 'Aluno',
+          email,
+          password: hash,
+          role: invite.type === 'STAFF' && invite.role ? invite.role : 'ALUNO',
+          student: invite.studentId ? { connect: { id: invite.studentId } } : undefined,
+        },
+        select: userSelect,
+      });
+
+      await tx.invite.update({
+        where: { id: invite.id },
+        data: {
+          status: 'ACCEPTED',
+          acceptedAt: new Date(),
+          acceptedById: u.id,
+        },
+      });
+
+      return u;
+    });
+
+    const jwt = signToken(user);
+    res.status(201).json({ token: jwt, user });
+  })
+);
+countRoute();
+
+router.post(
+  '/invites/:id/mark-sent',
+  requireAuth, requireRole('ADMIN'),
+  validate(inviteMarkSentSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { via } = req.validated;
+
+    const invite = await prisma.invite.findUnique({ where: { id } });
+    if (!invite) throw new HttpError(404, 'Convite não encontrado');
+    if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já aceito');
+
+    const updated = await prisma.invite.update({
+      where: { id },
+      data: {
+        status: invite.status === 'PENDING' ? 'SENT' : invite.status,
+        sentAt: invite.sentAt ?? new Date(),
+        sentVia: via,
+      },
+    });
+    res.json(updated);
+  })
+);
+countRoute();
+
+router.post(
+  '/invites/:id/revoke',
+  requireAuth, requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const invite = await prisma.invite.findUnique({ where: { id } });
+    if (!invite) throw new HttpError(404, 'Convite não encontrado');
+    if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já aceito');
+
+    const updated = await prisma.invite.update({
+      where: { id },
+      data: { status: 'REVOKED' },
+    });
+    res.json(updated);
+  })
+);
+countRoute();
+
+// ============================================
+// 13. ROTAS — STUDENT IMPORT (v2.2)
+// ============================================
+
+router.post(
+  '/students/import',
+  requireAuth, requireRole('ADMIN'),
+  validate(studentImportSchema),
+  asyncHandler(async (req, res) => {
+    const { students } = req.validated;
+
+    const out = { created: 0, skipped: 0, errors: [] };
+
+    await prisma.$transaction(async (tx) => {
+      for (const s of students) {
+        try {
+          const exists = await tx.student.findUnique({ where: { legacyId: s.legacyId } });
+          if (exists) {
+            out.skipped++;
+            continue;
+          }
+          await tx.student.create({
+            data: {
+              legacyId: s.legacyId,
+              name: s.name,
+              email: s.email ?? null,
+              phone: s.phone ?? null,
+              birthDate: s.birthDate ?? null,
+            },
+          });
+          out.created++;
+        } catch (err) {
+          out.errors.push({ legacyId: s.legacyId, error: err.message });
+        }
+      }
+    }, { timeout: 30000 });
+
+    res.status(201).json(out);
+  })
+);
+countRoute();
+
+// ============================================
+// 14. EXPORT
 // ============================================
 console.log(`${TAG} ✔ ${routeCount} rotas registradas`);
 console.log(`${TAG} ✅ carregado com sucesso`);
