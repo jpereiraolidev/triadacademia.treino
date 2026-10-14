@@ -1,7 +1,7 @@
 // monitor.js — Monitor com medição numérica de velocidade corrigida
 import axios from 'axios';
 
-const BASE = 'https://triadacademiatreino.vercel.app';
+const BASE = 'http://localhost:3333';
 const MAX_MIN = 30;
 
 const sleep = (min) => new Promise(r => setTimeout(r, min * 60 * 1000));

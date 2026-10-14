@@ -1,5 +1,20 @@
 // ============================================
-// CONFIG
+// schema.prisma — Triad Academia · v3.0
+// ============================================
+// Modelo de dados profissional, com:
+//   - Invite seguro (id + exp + nonce + hmac revalidável)
+//   - Ordem única de exercícios por treino
+//   - Soft delete padronizado (active)
+//   - Preços em Decimal(10,2) (nunca Float)
+//   - Índices otimizados para os padrões de query do routes.js
+//
+// Decisões de modelagem (v3.0):
+//   - Membership: múltiplas ativas permitidas (validação na app)
+//   - Checkin: origem validada na app (device OU registeredBy)
+//   - User.email / Student.email: podem coincidir entre tabelas
+//   - Preços: Decimal(10,2)
+//   - Soft delete: active Boolean
+//   - Auditoria: focada em Invite e transações críticas
 // ============================================
 
 generator client {
@@ -19,7 +34,7 @@ enum UserRole {
   ADMIN
   PROFESSOR
   RECEPCAO
-  ALUNO       // ← contas de aluno vindas de convite
+  ALUNO       // contas de aluno vindas de convite
 }
 
 enum WorkoutStatus {
@@ -45,13 +60,11 @@ enum CheckinStatus {
   NEGADO
 }
 
-// ← tipos de convite
 enum InviteType {
   ALUNO       // recadastro de aluno legado
   STAFF       // convite para funcionário
 }
 
-// ← ciclo de vida do convite
 enum InviteStatus {
   PENDING     // criado, aguardando envio
   SENT        // mensagem enviada
@@ -62,6 +75,11 @@ enum InviteStatus {
 
 // ============================================
 // USER
+// ============================================
+// Conta de acesso ao sistema. Separada de Student porque:
+//   - Staff (ADMIN/PROFESSOR/RECEPCAO) não é aluno
+//   - Aluno pode existir como Student sem ter User (legado)
+//   - Aluno com User tem vínculo 1:1 opcional
 // ============================================
 model User {
   id       String   @id @default(cuid())
@@ -75,18 +93,15 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // relações existentes
+  // Relações de negócio
   createdWorkouts WorkoutPlan[] @relation("WorkoutCreator")
   checkins        Checkin[]     @relation("CheckinRegisteredBy")
 
-  // vínculo com Student (1:1 opcional — quando role = ALUNO)
-  // Este lado NÃO tem FK — o Student é quem aponta pra cá
+  // Vínculo 1:1 opcional com Student (o FK fica em Student)
   student Student? @relation("UserStudent")
 
-  // convites criados por este usuário (admin)
-  invitesCreated Invite[] @relation("InviteCreatedBy")
-
-  // convites aceitos por este usuário
+  // Convites
+  invitesCreated  Invite[] @relation("InviteCreatedBy")
   invitesAccepted Invite[] @relation("InviteAcceptedBy")
 
   @@index([email])
@@ -97,6 +112,9 @@ model User {
 // ============================================
 // STUDENT
 // ============================================
+// Cadastro do aluno. Pode existir sem User (legado/importação)
+// ou com User (aluno que aceitou convite e criou conta).
+// ============================================
 model Student {
   id        String    @id @default(cuid())
   name      String    @db.VarChar(120)
@@ -104,12 +122,12 @@ model Student {
   phone     String?   @db.VarChar(20)
   birthDate DateTime?
 
-  // rastreamento do sistema legado (migração)
+  // Rastreamento do sistema legado (migração)
   legacyId   String? @unique @db.VarChar(80)
   legacyData Json?
 
   // FK para User (1:1 opcional — preenchida quando o aluno se recadastra)
-  // Este lado CARREGA a foreign key
+  // onDelete: SetNull — se o User for removido, o Student continua existindo
   userId String? @unique
 
   active Boolean @default(true)
@@ -117,15 +135,15 @@ model Student {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // relações existentes
+  // Relações de negócio
   workoutPlans WorkoutPlan[]
   memberships  Membership[]
   checkins     Checkin[]
 
-  // relação 1:1 com User (com fields/references explícitos)
+  // Vínculo 1:1 com User
   user User? @relation("UserStudent", fields: [userId], references: [id], onDelete: SetNull)
 
-  // convites apontando para este aluno
+  // Convites apontando para este aluno
   invites Invite[]
 
   @@index([name])
@@ -142,7 +160,7 @@ model Plan {
   name        String  @db.VarChar(80)
   description String? @db.Text
 
-  price        Decimal @db.Decimal(10, 2)
+  price        Decimal @db.Decimal(10, 2)  // nunca Float para dinheiro
   durationDays Int
 
   active Boolean @default(true)
@@ -158,6 +176,10 @@ model Plan {
 
 // ============================================
 // MEMBERSHIP
+// ============================================
+// Decisão v3.0: múltiplas matrículas ativas permitidas por aluno.
+// A regra "uma ativa por vez" é validada na camada de aplicação
+// (routes.js), não no banco — preserva histórico para auditoria.
 // ============================================
 model Membership {
   id        String @id @default(cuid())
@@ -189,6 +211,8 @@ model Membership {
 // ============================================
 // DEVICE
 // ============================================
+// Catraca/totem físico. Autentica via X-Device-Key (hash com pepper).
+// ============================================
 model Device {
   id         String @id @default(cuid())
   name       String @db.VarChar(80)
@@ -209,6 +233,9 @@ model Device {
 
 // ============================================
 // CHECKIN
+// ============================================
+// Decisão v3.0: origem (device OU registeredBy) validada na app.
+// Pelo menos um dos dois deve estar preenchido — regra de negócio.
 // ============================================
 model Checkin {
   id String @id @default(cuid())
@@ -293,6 +320,10 @@ model WorkoutPlan {
 // ============================================
 // WORKOUT EXERCISE
 // ============================================
+// Decisão v3.0: @@unique([workoutId, order]) impede ordem duplicada
+// dentro do mesmo treino. O routes.js faz orderBy: { order: 'asc' },
+// então duplicata quebraria a ordenação determinística.
+// ============================================
 model WorkoutExercise {
   id         String @id @default(cuid())
   workoutId  String
@@ -311,18 +342,27 @@ model WorkoutExercise {
   workout  WorkoutPlan @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   exercise Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
 
+  @@unique([workoutId, order])
   @@index([workoutId])
   @@index([exerciseId])
 }
 
 // ============================================
-// INVITE — Versão B1 (compacto)
+// INVITE — v3.0 (seguro)
 // ============================================
 // Estrutura do token: <id>.<hmac>
-//   - id:   12 bytes aleatórios → base64url → 16 chars  (@id)
-//   - hmac: HMAC-SHA256(id + exp + nonce) truncado em 10 bytes → base64url → 14 chars
-//   - token completo: ~31 chars
-//   - URL final: https://app/i/<token>  →  ~64 chars
+//   - id:    12 bytes aleatórios → base64url → 16 chars
+//   - exp:   Unix timestamp (segundos) — vem de expiresAt
+//   - nonce: 4 bytes aleatórios → hex → 8 chars
+//   - hmac:  HMAC-SHA256(id + ":" + exp + ":" + nonce) truncado em 10 bytes → base64url → 14 chars
+//   - token completo: <id>.<hmac> (~31 chars)
+//
+// Por que nonce agora é persistido:
+//   Sem ele, o HMAC não pode ser revalidado (o nonce era gerado e perdido).
+//   Com ele no banco, GET /invites/:token recalcula:
+//     expected = signInvite({ id, exp: expiresAt/1000, nonce })
+//     e compara com invite.hmac em tempo constante.
+//   Isso fecha a falha de segurança de forja do HMAC.
 // ============================================
 model Invite {
   id String @id @db.VarChar(16)
@@ -330,8 +370,11 @@ model Invite {
   // Token completo = id + "." + hmac (guardado para lookup rápido)
   token String @unique @db.VarChar(40)
 
-  // HMAC isolado (útil para auditoria/debug)
+  // HMAC isolado (revalidável agora que nonce é persistido)
   hmac String @db.VarChar(14)
+
+  // Nonce usado no cálculo do HMAC (necessário para revalidar)
+  nonce String @db.VarChar(8)
 
   // Quem criou (admin)
   createdById String

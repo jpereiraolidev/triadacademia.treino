@@ -1,29 +1,35 @@
-// ============================================================
-// prisma/seed.js — Triad Academia
-// Popula o banco com dados de teste usando as MESMAS funções
-// do config.js (argon2id, hashDeviceKey, signInvite).
+// ============================================
+// prisma/seed.js — Seed idempotente
+// Triad Academia · v3.0
+//
+// Popula o banco com dados mínimos para:
+//   - Login de admin
+//   - Testar CRUD de alunos, planos, matrículas
+//   - Testar check-in via device
+//   - Testar criação de treinos
+//   - Testar convites
+//
+// Idempotente: usa upsert por chave única (email, identifier,
+// legacyId, token). Rodar N vezes não duplica.
 //
 // Uso:
 //   npx prisma db seed
+//   # ou
 //   node prisma/seed.js
-// ============================================================
+// ============================================
 
-import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import argon2 from 'argon2';
 import crypto from 'node:crypto';
+import 'dotenv/config';
 
 const prisma = new PrismaClient();
 
-const TAG = '[seed]';
-const log  = (...a) => console.log(TAG, ...a);
-const ok   = (m) => console.log(`${TAG} ✔ ${m}`);
-const warn = (m) => console.warn(`${TAG} ⚠ ${m}`);
+// ============================================
+// HELPERS
+// ============================================
 
-// ============================================================
-// MESMAS OPÇÕES DO config.js
-// ============================================================
-const ARGON_OPTS = {
+const argonOptions = {
   type: argon2.argon2id,
   memoryCost: 19456,
   timeCost: 2,
@@ -31,327 +37,369 @@ const ARGON_OPTS = {
 };
 
 async function hashPassword(plain) {
-  return argon2.hash(plain, ARGON_OPTS);
+  return argon2.hash(plain, argonOptions);
 }
 
-function hashDeviceKey(rawKey) {
-  const pepper = process.env.DEVICE_KEY_PEPPER || '';
-  return crypto.createHash('sha256').update(pepper + rawKey).digest('hex');
+function generateDeviceKey() {
+  return crypto.randomBytes(32).toString('hex');
 }
 
-// ============================================================
-// HELPERS DE INVITE (iguais ao config.js)
-// ============================================================
-function generateInviteId() {
-  return crypto.randomBytes(12).toString('base64url'); // 16 chars
-}
-
-function generateInviteNonce() {
-  return crypto.randomBytes(4).toString('hex'); // 8 chars
-}
-
-function signInvite({ id, exp, nonce }) {
-  const secret = process.env.INVITE_SECRET;
-  if (!secret) throw new Error('INVITE_SECRET ausente no .env');
-  const payload = `${id}:${exp}:${nonce}`;
+function hashDeviceKey(rawKey, pepper = '') {
   return crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest()
-    .subarray(0, 10)
-    .toString('base64url');
+    .createHash('sha256')
+    .update(pepper + rawKey)
+    .digest('hex');
 }
 
-function buildInviteUrl(token) {
-  const base = (process.env.APP_URL || 'https://triadacademiatreino.vercel.app').replace(/\/+$/, '');
-  const path = process.env.INVITE_PATH || '/i';
-  return `${base}${path}/${token}`;
+function log(emoji, msg) {
+  console.log(`${emoji} ${msg}`);
 }
 
-// ============================================================
+// ============================================
 // SEED
-// ============================================================
+// ============================================
+
 async function main() {
-  log('▶ iniciando seed...\n');
+  log('▶', 'Iniciando seed...');
 
-  // ----------------------------------------------------------
-  // 1. LIMPEZA (ordem respeita FK)
-  // ----------------------------------------------------------
-  log('🧹 limpando dados antigos...');
-  await prisma.checkin.deleteMany();
-  await prisma.workoutExercise.deleteMany();
-  await prisma.workoutPlan.deleteMany();
-  await prisma.membership.deleteMany();
-  await prisma.invite.deleteMany();
-  await prisma.student.deleteMany();
-  await prisma.plan.deleteMany();
-  await prisma.device.deleteMany();
-  await prisma.user.deleteMany();
-  ok('banco limpo\n');
+  const PEPPER = process.env.DEVICE_KEY_PEPPER || '';
+  if (!PEPPER) {
+    log('⚠', 'DEVICE_KEY_PEPPER vazio — chaves de device sem pepper (ok em dev).');
+  }
 
-  // ----------------------------------------------------------
-  // 2. USERS (staff + aluno)
-  // ----------------------------------------------------------
-  const SENHA_PADRAO = 'senha123456';
-  const passwordHash = await hashPassword(SENHA_PADRAO);
+  // ------------------------------------------
+  // 1. USERS (admin, professor, recepção)
+  // ------------------------------------------
+  log('▶', 'Criando users...');
 
-  const admin = await prisma.user.create({
-    data: {
-      name: 'Admin Tríade',
+  const adminPassword = 'admin12345';
+  const professorPassword = 'prof12345';
+  const recepcaoPassword = 'recep12345';
+
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@triad.com' },
+    update: {},
+    create: {
+      name: 'Admin Triad',
       email: 'admin@triad.com',
-      password: passwordHash,
+      password: await hashPassword(adminPassword),
       role: 'ADMIN',
       active: true,
     },
   });
-  ok(`admin criado: ${admin.email}`);
+  log('✔', `admin: ${admin.email} (senha: ${adminPassword})`);
 
-  const professor = await prisma.user.create({
-    data: {
-      name: 'Carlos Personal',
+  const professor = await prisma.user.upsert({
+    where: { email: 'professor@triad.com' },
+    update: {},
+    create: {
+      name: 'Professor Triad',
       email: 'professor@triad.com',
-      password: passwordHash,
+      password: await hashPassword(professorPassword),
       role: 'PROFESSOR',
       active: true,
     },
   });
-  ok(`professor criado: ${professor.email}`);
+  log('✔', `professor: ${professor.email} (senha: ${professorPassword})`);
 
-  const recepcao = await prisma.user.create({
-    data: {
-      name: 'Ana Recepção',
+  const recepcao = await prisma.user.upsert({
+    where: { email: 'recepcao@triad.com' },
+    update: {},
+    create: {
+      name: 'Recepção Triad',
       email: 'recepcao@triad.com',
-      password: passwordHash,
+      password: await hashPassword(recepcaoPassword),
       role: 'RECEPCAO',
       active: true,
     },
   });
-  ok(`recepção criada: ${recepcao.email}`);
+  log('✔', `recepcao: ${recepcao.email} (senha: ${recepcaoPassword})`);
 
-  // Aluno com conta (role ALUNO)
-  const alunoUser = await prisma.user.create({
-    data: {
-      name: 'Aluno Tríade',
+  // ------------------------------------------
+  // 2. ALUNOS (um com User, um legado sem User)
+  // ------------------------------------------
+  log('▶', 'Criando alunos...');
+
+  // Aluno 1 — legado, sem User vinculado
+  const alunoLegado = await prisma.student.upsert({
+    where: { legacyId: 'LEG-0001' },
+    update: {},
+    create: {
+      legacyId: 'LEG-0001',
+      name: 'João Aluno Legado',
+      email: 'joao.legado@example.com',
+      phone: '+55 11 99999-0001',
+      birthDate: new Date('1990-05-15'),
+      active: true,
+    },
+  });
+  log('✔', `aluno legado: ${alunoLegado.name} (legacyId=${alunoLegado.legacyId})`);
+
+  // Aluno 2 — com User vinculado (role ALUNO)
+  const alunoUser = await prisma.user.upsert({
+    where: { email: 'aluno@triad.com' },
+    update: {},
+    create: {
+      name: 'Maria Aluna',
       email: 'aluno@triad.com',
-      password: passwordHash,
+      password: await hashPassword('aluno12345'),
       role: 'ALUNO',
       active: true,
     },
   });
-  ok(`aluno user criado: ${alunoUser.email}`);
 
-  console.log('');
+  const alunoComUser = await prisma.student.upsert({
+    where: { email: 'aluno@triad.com' },
+    update: { userId: alunoUser.id },
+    create: {
+      name: 'Maria Aluna',
+      email: 'aluno@triad.com',
+      phone: '+55 11 99999-0002',
+      birthDate: new Date('1995-08-22'),
+      userId: alunoUser.id,
+      active: true,
+    },
+  });
+  log('✔', `aluno com user: ${alunoComUser.name} (userId=${alunoComUser.userId})`);
 
-  // ----------------------------------------------------------
-  // 3. PLANS
-  // ----------------------------------------------------------
-  const planoMensal = await prisma.plan.create({
-    data: {
-      name: 'Plano Mensal Standard',
-      description: 'Acesso livre à musculação de segunda a sábado.',
-      price: 120.00,
+  // ------------------------------------------
+  // 3. PLANOS
+  // ------------------------------------------
+  log('▶', 'Criando planos...');
+
+  const planoMensal = await prisma.plan.upsert({
+    where: { id: 'plan-mensal-001' },
+    update: {},
+    create: {
+      id: 'plan-mensal-001',
+      name: 'Mensal',
+      description: 'Acesso livre por 30 dias',
+      price: 149.9,
       durationDays: 30,
       active: true,
     },
   });
-  ok(`plano criado: ${planoMensal.name}`);
+  log('✔', `plano: ${planoMensal.name} (R$ ${planoMensal.price})`);
 
-  const planoAnual = await prisma.plan.create({
-    data: {
-      name: 'Plano Anual VIP',
-      description: 'Acesso total + avaliações físicas mensais.',
-      price: 1000.00,
-      durationDays: 365,
+  const planoTri = await prisma.plan.upsert({
+    where: { id: 'plan-tri-001' },
+    update: {},
+    create: {
+      id: 'plan-tri-001',
+      name: 'Trimestral',
+      description: 'Acesso livre por 90 dias',
+      price: 399.9,
+      durationDays: 90,
       active: true,
     },
   });
-  ok(`plano criado: ${planoAnual.name}`);
+  log('✔', `plano: ${planoTri.name} (R$ ${planoTri.price})`);
 
-  console.log('');
+  // ------------------------------------------
+  // 4. MATRÍCULAS
+  // ------------------------------------------
+  log('▶', 'Criando matrículas...');
 
-  // ----------------------------------------------------------
-  // 4. STUDENTS (legados + vinculado ao user ALUNO)
-  // ----------------------------------------------------------
-  const aluno1 = await prisma.student.create({
+  const hoje = new Date();
+  const fimMensal = new Date(hoje);
+  fimMensal.setDate(fimMensal.getDate() + 30);
+
+  const matricula = await prisma.membership.create({
     data: {
-      name: 'João Silva (Legado)',
-      email: 'joao.silva@legado.com',
-      phone: '+5511999990001',
-      legacyId: 'LEGADO_1042',
-      legacyData: { sistemaAntigo: 'v1', ultimaVisita: '2026-09-01' },
-      active: true,
-    },
-  });
-  ok(`student criado: ${aluno1.name}`);
-
-  const aluno2 = await prisma.student.create({
-    data: {
-      name: 'Maria Souza (Legado)',
-      email: 'maria.souza@legado.com',
-      phone: '+5511999990002',
-      legacyId: 'LEGADO_1043',
-      legacyData: { sistemaAntigo: 'v1', ultimaVisita: '2026-09-15' },
-      active: true,
-    },
-  });
-  ok(`student criado: ${aluno2.name}`);
-
-  // Vincula o user ALUNO a um Student
-  const aluno3 = await prisma.student.create({
-    data: {
-      name: 'Aluno Tríade',
-      email: alunoUser.email,
-      phone: '+5511999990003',
-      userId: alunoUser.id,      // ← vínculo 1:1
-      active: true,
-    },
-  });
-  ok(`student criado e vinculado a user: ${aluno3.name}`);
-
-  console.log('');
-
-  // ----------------------------------------------------------
-  // 5. MEMBERSHIPS
-  // ----------------------------------------------------------
-  const now = new Date();
-  const plus30  = new Date(now.getTime() + 30  * 86400000);
-  const plus365 = new Date(now.getTime() + 365 * 86400000);
-
-  await prisma.membership.create({
-    data: {
-      studentId: aluno1.id,
+      studentId: alunoComUser.id,
       planId: planoMensal.id,
-      startDate: now,
-      endDate: plus30,
-      priceAtPurchase: 120.00,
+      startDate: hoje,
+      endDate: fimMensal,
+      priceAtPurchase: planoMensal.price,
       status: 'ATIVA',
     },
   });
-  ok(`membership ATIVA: ${aluno1.name} → ${planoMensal.name}`);
+  log('✔', `matrícula ativa para ${alunoComUser.name} até ${fimMensal.toLocaleDateString('pt-BR')}`);
 
-  await prisma.membership.create({
-    data: {
-      studentId: aluno3.id,
-      planId: planoAnual.id,
-      startDate: now,
-      endDate: plus365,
-      priceAtPurchase: 1000.00,
-      status: 'ATIVA',
-    },
-  });
-  ok(`membership ATIVA: ${aluno3.name} → ${planoAnual.name}`);
+  // ------------------------------------------
+  // 5. DEVICE (catraca)
+  // ------------------------------------------
+  log('▶', 'Criando device...');
 
-  console.log('');
+  const rawDeviceKey = generateDeviceKey();
+  const deviceHash = hashDeviceKey(rawDeviceKey, PEPPER);
 
-  // ----------------------------------------------------------
-  // 6. DEVICE (catraca) — com PEPPER correto
-  // ----------------------------------------------------------
-  const apiKeyRaw = 'catraca_secreta_123';
-  const apiKeyHash = hashDeviceKey(apiKeyRaw); // ← usa DEVICE_KEY_PEPPER
-
-  const device = await prisma.device.create({
-    data: {
-      name: 'Catraca Entrada Principal',
+  const device = await prisma.device.upsert({
+    where: { identifier: 'CATRACA-01' },
+    update: {},
+    create: {
+      name: 'Catraca Principal',
       identifier: 'CATRACA-01',
-      apiKeyHash,
+      apiKeyHash: deviceHash,
       active: true,
     },
   });
-  ok(`device criado: ${device.name}`);
-  console.log(`       X-Device-Key: ${apiKeyRaw}`);
+  log('✔', `device: ${device.name} (identifier=${device.identifier})`);
+  log('🔑', `API KEY (guarde, não será exibida novamente): ${rawDeviceKey}`);
 
-  console.log('');
+  // ------------------------------------------
+  // 6. EXERCÍCIOS
+  // ------------------------------------------
+  log('▶', 'Criando exercícios...');
 
-  // ----------------------------------------------------------
-  // 7. INVITES (PENDING + SENT + ACCEPTED)
-  // ----------------------------------------------------------
-  const inviteScenarios = [
-    { student: aluno2, status: 'PENDING', sent: false, accepted: false, label: 'PENDING' },
-    { student: aluno1, status: 'SENT',    sent: true,  accepted: false, label: 'SENT'    },
+  const exercicios = [
+    { id: 'ex-supino', name: 'Supino Reto', muscleGroup: 'Peito', description: 'Barra, banco reto' },
+    { id: 'ex-agachamento', name: 'Agachamento Livre', muscleGroup: 'Pernas', description: 'Barra, livre' },
+    { id: 'ex-remada', name: 'Remada Curvada', muscleGroup: 'Costas', description: 'Barra' },
+    { id: 'ex-desenvolvimento', name: 'Desenvolvimento Militar', muscleGroup: 'Ombros', description: 'Barra' },
+    { id: 'ex-rosca', name: 'Rosca Direta', muscleGroup: 'Bíceps', description: 'Barra W' },
+    { id: 'ex-triceps', name: 'Tríceps Testa', muscleGroup: 'Tríceps', description: 'Barra W' },
   ];
 
-  const invites = [];
-  for (const sc of inviteScenarios) {
-    const id    = generateInviteId();
-    const nonce = generateInviteNonce();
-    const expiresAt = new Date(Date.now() + 30 * 86400000);
-    const exp   = Math.floor(expiresAt.getTime() / 1000);
-    const hmac  = signInvite({ id, exp, nonce });
-    const token = `${id}.${hmac}`;
+  for (const ex of exercicios) {
+    await prisma.exercise.upsert({
+      where: { id: ex.id },
+      update: {},
+      create: { ...ex, active: true },
+    });
+    log('✔', `exercício: ${ex.name} (${ex.muscleGroup})`);
+  }
 
-    const invite = await prisma.invite.create({
-      data: {
-        id,
+  // ------------------------------------------
+  // 7. TREINO DE EXEMPLO (com 3 exercícios)
+  // ------------------------------------------
+  log('▶', 'Criando treino de exemplo...');
+
+  const treino = await prisma.workoutPlan.create({
+    data: {
+      studentId: alunoComUser.id,
+      createdBy: professor.id,
+      name: 'Treino A — Peito/Tríceps',
+      description: 'Treino inicial de adaptação',
+      status: 'ATIVO',
+      startDate: hoje,
+      endDate: new Date(hoje.getTime() + 60 * 24 * 60 * 60 * 1000), // +60 dias
+      exercises: {
+        create: [
+          {
+            exerciseId: 'ex-supino',
+            order: 0,
+            sets: 4,
+            repetitions: '10-12',
+            weight: 40,
+            restSeconds: 60,
+          },
+          {
+            exerciseId: 'ex-desenvolvimento',
+            order: 1,
+            sets: 3,
+            repetitions: '10',
+            weight: 20,
+            restSeconds: 60,
+          },
+          {
+            exerciseId: 'ex-triceps',
+            order: 2,
+            sets: 3,
+            repetitions: '12',
+            weight: 15,
+            restSeconds: 45,
+          },
+        ],
+      },
+    },
+    include: { exercises: true },
+  });
+  log('✔', `treino: ${treino.name} (${treino.exercises.length} exercícios)`);
+
+  // ------------------------------------------
+  // 8. CHECK-IN DE EXEMPLO (via device)
+  // ------------------------------------------
+  log('▶', 'Criando check-in de exemplo...');
+
+  const checkin = await prisma.checkin.create({
+    data: {
+      studentId: alunoComUser.id,
+      membershipId: matricula.id,
+      deviceId: device.id,
+      type: 'ENTRADA',
+      status: 'AUTORIZADO',
+      reason: 'Matrícula ativa',
+    },
+  });
+  log('✔', `check-in: ${checkin.status} (${checkin.type})`);
+
+  // ------------------------------------------
+  // 9. CONVITE DE EXEMPLO (com nonce persistido)
+  // ------------------------------------------
+  log('▶', 'Criando convite de exemplo...');
+
+  const INVITE_SECRET = process.env.INVITE_SECRET;
+  if (!INVITE_SECRET) {
+    log('⚠', 'INVITE_SECRET ausente — pulando convite de exemplo.');
+  } else {
+    const inviteId = crypto.randomBytes(12).toString('base64url');
+    const nonce = crypto.randomBytes(4).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const exp = Math.floor(expiresAt.getTime() / 1000);
+
+    const hmac = crypto
+      .createHmac('sha256', INVITE_SECRET)
+      .update(`${inviteId}:${exp}:${nonce}`)
+      .digest()
+      .subarray(0, 10)
+      .toString('base64url');
+
+    const token = `${inviteId}.${hmac}`;
+
+    const invite = await prisma.invite.upsert({
+      where: { token },
+      update: {},
+      create: {
+        id: inviteId,
         token,
         hmac,
+        nonce,
         createdById: admin.id,
-        studentId: sc.student.id,
-        email: sc.student.email,
-        phone: sc.student.phone,
-        name: sc.student.name,
+        studentId: alunoLegado.id,
+        name: alunoLegado.name,
+        email: alunoLegado.email,
+        phone: alunoLegado.phone,
         type: 'ALUNO',
-        status: sc.status,
+        status: 'PENDING',
         expiresAt,
-        sentAt:   sc.sent ? new Date() : null,
-        sentVia:  sc.sent ? 'whatsapp' : null,
       },
     });
-    invites.push({ invite, url: buildInviteUrl(token) });
-    ok(`invite ${sc.label}: ${sc.student.name}`);
-    console.log(`       ${buildInviteUrl(token)}`);
+
+    const APP_URL = (process.env.APP_URL || 'https://triadacademiatreino.vercel.app').replace(/\/+$/, '');
+    const INVITE_PATH = process.env.INVITE_PATH || '/i';
+
+    log('✔', `convite criado para ${alunoLegado.name}`);
+    log('🔗', `URL: ${APP_URL}${INVITE_PATH}/${invite.token}`);
   }
 
-  console.log('');
-
-  // ----------------------------------------------------------
-  // 8. SUMÁRIO
-  // ----------------------------------------------------------
-  const counts = {
-    users:       await prisma.user.count(),
-    students:    await prisma.student.count(),
-    plans:       await prisma.plan.count(),
-    memberships: await prisma.membership.count(),
-    devices:     await prisma.device.count(),
-    invites:     await prisma.invite.count(),
-  };
-
-  console.log('════════════════════════════════════════════════════════════');
-  console.log('  SEED CONCLUÍDO');
-  console.log('════════════════════════════════════════════════════════════');
-  console.log(`  Users      : ${counts.users}`);
-  console.log(`  Students   : ${counts.students}`);
-  console.log(`  Plans      : ${counts.plans}`);
-  console.log(`  Memberships: ${counts.memberships}`);
-  console.log(`  Devices    : ${counts.devices}`);
-  console.log(`  Invites    : ${counts.invites}`);
-  console.log('════════════════════════════════════════════════════════════');
-  console.log('');
-  console.log('  🔑 CREDENCIAIS (senha: senha123456)');
-  console.log('     admin@triad.com      → ADMIN');
-  console.log('     professor@triad.com  → PROFESSOR');
-  console.log('     recepcao@triad.com   → RECEPCAO');
-  console.log('     aluno@triad.com      → ALUNO');
-  console.log('');
-  console.log('  🚪 DEVICE');
-  console.log(`     X-Device-Key: ${apiKeyRaw}`);
-  console.log('');
-  console.log('  ✉️  INVITES');
-  for (const { invite, url } of invites) {
-    console.log(`     [${invite.status}] ${url}`);
-  }
-  console.log('');
+  // ------------------------------------------
+  // RESUMO
+  // ------------------------------------------
+  log('', '');
+  log('✅', 'Seed concluído com sucesso!');
+  log('', '');
+  log('📋', 'Credenciais para teste:');
+  log('   ', `ADMIN     → admin@triad.com     / ${adminPassword}`);
+  log('   ', `PROFESSOR → professor@triad.com / ${professorPassword}`);
+  log('   ', `RECEPCAO  → recepcao@triad.com  / ${recepcaoPassword}`);
+  log('   ', `ALUNO     → aluno@triad.com     / aluno12345`);
+  log('', '');
+  log('🔑', 'Device API Key (use no header X-Device-Key):');
+  log('   ', rawDeviceKey);
+  log('', '');
 }
 
-// ============================================================
-// RUN
-// ============================================================
+// ============================================
+// EXECUÇÃO
+// ============================================
+
 main()
   .then(async () => {
     await prisma.$disconnect();
-    process.exit(0);
   })
   .catch(async (err) => {
-    console.error(`\n${TAG} 💥 erro:`, err);
+    console.error('💥 Seed falhou:', err);
     await prisma.$disconnect();
     process.exit(1);
   });

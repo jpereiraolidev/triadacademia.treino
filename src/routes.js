@@ -1,107 +1,24 @@
 // ============================================
-// routers.js — Todas as rotas /api/v1
-// Triad Academia · v2.3
+// src/routes.js — Todas as rotas /api/v1
+// Triad Academia · v3.0
 //
-// Este arquivo:
-//   1. Importa express, config.js e auth.js
-//   2. Registra TODAS as rotas em /api/v1
-//   3. Exporta o router
-//
-// Mudanças v2.3 (sobre 2.2):
-//   - Importa safeQuery de ./prisma.js
-//   - Rotas GET de leitura usam safeQuery (retry contra pooler zumbi)
-//   - Rota POST /auth/login usa safeQuery na findUnique do user
-//   - Transações e rotas de escrita NÃO usam safeQuery (por design)
-//
-// Se algo falhar aqui, procure por "[routers.js]" no log.
+// Inclui:
+//   - CRUD de users, students, plans, memberships, devices
+//   - Checkins (device + manual + listagem)
+//   - Exercises, Workouts, Evolution
+//   - Invites (com revalidação de HMAC)
+//   - Student import
+//   - GET /_ping  (ultraleve, usado pelo cron)
+//   - POST /cron/ping (dispara 5 self-pings a cada 20s)
 // ============================================
 
-const TAG = '[routers.js]';
-console.log(`${TAG} ▶ carregando...`);
-
-// ============================================
-// 1. IMPORTS
-// ============================================
-let express;
-try {
-  express = (await import('express')).default;
-  console.log(`${TAG} ✔ express carregado`);
-} catch (err) {
-  console.error(`${TAG} 💥 Falha ao importar 'express'. Verifique: npm install express`);
-  console.error(`${TAG}    Detalhe: ${err.message}`);
-  process.exit(1);
-}
-
-let config;
-try {
-  config = await import('./config.js');
-  const required = [
-    'prisma', 'asyncHandler', 'validate', 'HttpError',
-    'hashPassword', 'verifyPassword', 'signToken', 'generateDeviceKey', 'hashDeviceKey',
-    'userSelect',
-    'loginSchema', 'userCreateSchema', 'userUpdateSchema', 'userPasswordSchema',
-    'exerciseCreateSchema', 'exerciseUpdateSchema',
-    'studentCreateSchema', 'studentUpdateSchema',
-    'planCreateSchema', 'planUpdateSchema',
-    'membershipCreateSchema', 'membershipUpdateSchema',
-    'deviceCreateSchema', 'deviceUpdateSchema',
-    'checkinCreateSchema', 'checkinManualSchema', 'checkinQuerySchema',
-    'workoutCreateSchema', 'workoutUpdateSchema',
-    'workoutExerciseCreateSchema', 'workoutExerciseUpdateSchema',
-    // novos (v2.2)
-    'inviteCreateSchema', 'inviteBulkSchema', 'inviteAcceptSchema',
-    'inviteMarkSentSchema', 'studentImportSchema',
-    'generateInviteId', 'generateInviteNonce', 'signInvite', 'buildInviteUrl',
-  ];
-  const missing = required.filter((k) => config[k] === undefined);
-  if (missing.length) {
-    console.error(`${TAG} 💥 config.js não exportou: ${missing.join(', ')}`);
-    console.error(`${TAG}    Verifique se config.js está completo e salvo.`);
-    process.exit(1);
-  }
-  console.log(`${TAG} ✔ config.js carregado (todos os ${required.length} exports presentes)`);
-} catch (err) {
-  console.error(`${TAG} 💥 Falha ao importar './config.js'`);
-  console.error(`${TAG}    Detalhe: ${err.message}`);
-  process.exit(1);
-}
-
-// ← NOVO (v2.3): importa safeQuery direto de ./prisma.js
-let safeQuery;
-try {
-  const prismaMod = await import('./prisma.js');
-  safeQuery = prismaMod.safeQuery;
-  if (typeof safeQuery !== 'function') {
-    console.error(`${TAG} 💥 ./prisma.js não exportou 'safeQuery'.`);
-    process.exit(1);
-  }
-  console.log(`${TAG} ✔ safeQuery importado de ./prisma.js`);
-} catch (err) {
-  console.error(`${TAG} 💥 Falha ao importar './prisma.js'`);
-  console.error(`${TAG}    Detalhe: ${err.message}`);
-  process.exit(1);
-}
-
-let auth;
-try {
-  auth = await import('./auth.js');
-  const required = ['requireAuth', 'requireRole', 'requireAluno', 'requireDevice', 'loginLimiter', 'deviceLimiter'];
-  const missing = required.filter((k) => auth[k] === undefined);
-  if (missing.length) {
-    console.error(`${TAG} 💥 auth.js não exportou: ${missing.join(', ')}`);
-    console.error(`${TAG}    Verifique se auth.js está completo e salvo.`);
-    process.exit(1);
-  }
-  console.log(`${TAG} ✔ auth.js carregado (requireAuth, requireRole, requireAluno, requireDevice, loginLimiter, deviceLimiter)`);
-} catch (err) {
-  console.error(`${TAG} 💥 Falha ao importar './auth.js'`);
-  console.error(`${TAG}    Detalhe: ${err.message}`);
-  process.exit(1);
-}
-
-const {
+import express from 'express';
+import { log as rootLog } from './logs.js';
+import { safeQuery } from './prisma.js';
+import {
   prisma, asyncHandler, validate, HttpError,
-  hashPassword, verifyPassword, signToken, generateDeviceKey, hashDeviceKey,
+  hashPassword, verifyPassword, signToken,
+  generateDeviceKey, hashDeviceKey,
   userSelect,
   loginSchema, userCreateSchema, userUpdateSchema, userPasswordSchema,
   exerciseCreateSchema, exerciseUpdateSchema,
@@ -112,23 +29,26 @@ const {
   checkinCreateSchema, checkinManualSchema, checkinQuerySchema,
   workoutCreateSchema, workoutUpdateSchema,
   workoutExerciseCreateSchema, workoutExerciseUpdateSchema,
-  // novos (v2.2)
   inviteCreateSchema, inviteBulkSchema, inviteAcceptSchema,
   inviteMarkSentSchema, studentImportSchema,
-  generateInviteId, generateInviteNonce, signInvite, buildInviteUrl,
-} = config;
+  generateInviteId, generateInviteNonce, signInvite, buildInviteUrl, verifyInviteHmac,
+  APP_URL, INVITE_PATH, CRON_SECRET,
+} from './config.js';
 
-const {
+import {
   requireAuth, requireRole, requireAluno, requireDevice,
   loginLimiter, deviceLimiter,
-} = auth;
+} from './auth.js';
+
+const log = rootLog.child('[routes.js] ');
+log.info('carregando...');
 
 const router = express.Router();
 let routeCount = 0;
-function countRoute() { routeCount++; }
+const countRoute = () => routeCount++;
 
 // ============================================
-// 2. ROTAS — AUTH
+// AUTH
 // ============================================
 
 router.post(
@@ -138,7 +58,6 @@ router.post(
   asyncHandler(async (req, res) => {
     const { email, password } = req.validated;
 
-    // ← NOVO (v2.3): safeQuery na findUnique (primeira query da request)
     const user = await safeQuery(
       () => prisma.user.findUnique({ where: { email } }),
       'auth.login.findUser'
@@ -161,26 +80,20 @@ countRoute();
 router.get(
   '/auth/me',
   requireAuth,
-  asyncHandler(async (req, res) => {
-    res.json(req.user);
-  })
+  asyncHandler(async (req, res) => res.json(req.user))
 );
 countRoute();
 
 // ============================================
-// 3. ROTAS — USERS (ADMIN)
+// USERS
 // ============================================
 
 router.get(
   '/users',
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
-    // ← NOVO (v2.3): safeQuery
     const users = await safeQuery(
-      () => prisma.user.findMany({
-        select: userSelect,
-        orderBy: { name: 'asc' },
-      }),
+      () => prisma.user.findMany({ select: userSelect, orderBy: { name: 'asc' } }),
       'users.list'
     );
     res.json(users);
@@ -215,9 +128,7 @@ router.patch(
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Usuário não encontrado');
     const user = await prisma.user.update({
-      where: { id },
-      data: req.validated,
-      select: userSelect,
+      where: { id }, data: req.validated, select: userSelect,
     });
     res.json(user);
   })
@@ -254,7 +165,7 @@ router.delete(
 countRoute();
 
 // ============================================
-// 4. ROTAS — EXERCISES
+// EXERCISES
 // ============================================
 
 router.get(
@@ -265,12 +176,9 @@ router.get(
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (muscleGroup) where.muscleGroup = muscleGroup;
     if (active !== undefined) where.active = active === 'true';
-    // ← NOVO (v2.3): safeQuery
+
     const exercises = await safeQuery(
-      () => prisma.exercise.findMany({
-        where,
-        orderBy: { name: 'asc' },
-      }),
+      () => prisma.exercise.findMany({ where, orderBy: { name: 'asc' } }),
       'exercises.list'
     );
     res.json(exercises);
@@ -328,7 +236,7 @@ router.delete(
 countRoute();
 
 // ============================================
-// 5. ROTAS — STUDENTS
+// STUDENTS
 // ============================================
 
 router.get(
@@ -339,12 +247,9 @@ router.get(
     const where = {};
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (active !== undefined) where.active = active === 'true';
-    // ← NOVO (v2.3): safeQuery
+
     const students = await safeQuery(
-      () => prisma.student.findMany({
-        where,
-        orderBy: { name: 'asc' },
-      }),
+      () => prisma.student.findMany({ where, orderBy: { name: 'asc' } }),
       'students.list'
     );
     res.json(students);
@@ -356,15 +261,11 @@ router.get(
   '/students/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    // ← NOVO (v2.3): safeQuery
     const student = await safeQuery(
       () => prisma.student.findUnique({
         where: { id: req.params.id },
         include: {
-          memberships: {
-            include: { plan: true },
-            orderBy: { startDate: 'desc' },
-          },
+          memberships: { include: { plan: true }, orderBy: { startDate: 'desc' } },
         },
       }),
       'students.getById'
@@ -403,10 +304,7 @@ router.patch(
     const { id } = req.params;
     const existing = await prisma.student.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Aluno não encontrado');
-    const student = await prisma.student.update({
-      where: { id },
-      data: req.validated,
-    });
+    const student = await prisma.student.update({ where: { id }, data: req.validated });
     res.json(student);
   })
 );
@@ -426,7 +324,7 @@ router.delete(
 countRoute();
 
 // ============================================
-// 6. ROTAS — PLANS
+// PLANS
 // ============================================
 
 router.get(
@@ -436,12 +334,9 @@ router.get(
     const { active } = req.query;
     const where = {};
     if (active !== undefined) where.active = active === 'true';
-    // ← NOVO (v2.3): safeQuery
+
     const plans = await safeQuery(
-      () => prisma.plan.findMany({
-        where,
-        orderBy: { name: 'asc' },
-      }),
+      () => prisma.plan.findMany({ where, orderBy: { name: 'asc' } }),
       'plans.list'
     );
     res.json(plans);
@@ -453,7 +348,6 @@ router.get(
   '/plans/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    // ← NOVO (v2.3): safeQuery
     const plan = await safeQuery(
       () => prisma.plan.findUnique({ where: { id: req.params.id } }),
       'plans.getById'
@@ -503,7 +397,7 @@ router.delete(
 countRoute();
 
 // ============================================
-// 7. ROTAS — MEMBERSHIPS
+// MEMBERSHIPS
 // ============================================
 
 router.get(
@@ -515,7 +409,7 @@ router.get(
     if (studentId) where.studentId = studentId;
     if (status) where.status = status;
     if (active === 'true') where.endDate = { gte: new Date() };
-    // ← NOVO (v2.3): safeQuery
+
     const memberships = await safeQuery(
       () => prisma.membership.findMany({
         where,
@@ -536,7 +430,6 @@ router.get(
   '/memberships/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    // ← NOVO (v2.3): safeQuery
     const m = await safeQuery(
       () => prisma.membership.findUnique({
         where: { id: req.params.id },
@@ -571,15 +464,11 @@ router.post(
       finalEnd = new Date(startDate);
       finalEnd.setDate(finalEnd.getDate() + plan.durationDays);
     }
-    if (finalEnd <= startDate) {
-      throw new HttpError(400, 'endDate deve ser depois de startDate');
-    }
+    if (finalEnd <= startDate) throw new HttpError(400, 'endDate deve ser depois de startDate');
 
     const membership = await prisma.membership.create({
       data: {
-        studentId,
-        planId,
-        startDate,
+        studentId, planId, startDate,
         endDate: finalEnd,
         priceAtPurchase: priceAtPurchase ?? plan.price,
         status: status ?? 'ATIVA',
@@ -600,8 +489,7 @@ router.patch(
     const existing = await prisma.membership.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Matrícula não encontrada');
     const membership = await prisma.membership.update({
-      where: { id },
-      data: req.validated,
+      where: { id }, data: req.validated,
       include: { student: true, plan: true },
     });
     res.json(membership);
@@ -623,14 +511,13 @@ router.delete(
 countRoute();
 
 // ============================================
-// 8. ROTAS — DEVICES
+// DEVICES
 // ============================================
 
 router.get(
   '/devices',
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
-    // ← NOVO (v2.3): safeQuery
     const devices = await safeQuery(
       () => prisma.device.findMany({
         select: {
@@ -654,6 +541,7 @@ router.post(
     const { name, identifier, active } = req.validated;
     const exists = await prisma.device.findUnique({ where: { identifier } });
     if (exists) throw new HttpError(409, 'Identificador já cadastrado');
+
     const rawKey = generateDeviceKey();
     const apiKeyHash = hashDeviceKey(rawKey);
     const device = await prisma.device.create({
@@ -678,8 +566,7 @@ router.patch(
     const existing = await prisma.device.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Device não encontrado');
     const device = await prisma.device.update({
-      where: { id },
-      data: req.validated,
+      where: { id }, data: req.validated,
       select: {
         id: true, name: true, identifier: true, active: true,
         createdAt: true, updatedAt: true,
@@ -701,8 +588,7 @@ router.post(
     const apiKeyHash = hashDeviceKey(rawKey);
     await prisma.device.update({ where: { id }, data: { apiKeyHash } });
     res.json({
-      id,
-      apiKey: rawKey,
+      id, apiKey: rawKey,
       warning: 'Guarde esta API key. Ela não será exibida novamente.',
     });
   })
@@ -723,33 +609,26 @@ router.delete(
 countRoute();
 
 // ============================================
-// 9. ROTAS — CHECKINS
+// CHECKINS
 // ============================================
 
 async function evaluateCheckin(studentId) {
-  try {
-    const student = await prisma.student.findUnique({ where: { id: studentId } });
-    if (!student) throw new HttpError(404, 'Aluno não encontrado');
-    if (!student.active) return { authorized: false, reason: 'Aluno inativo', membership: null };
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  if (!student) throw new HttpError(404, 'Aluno não encontrado');
+  if (!student.active) return { authorized: false, reason: 'Aluno inativo', membership: null };
 
-    const now = new Date();
-    const membership = await prisma.membership.findFirst({
-      where: {
-        studentId,
-        status: 'ATIVA',
-        startDate: { lte: now },
-        endDate: { gte: now },
-      },
-      orderBy: { endDate: 'desc' },
-    });
-    if (!membership) return { authorized: false, reason: 'Sem matrícula ativa', membership: null };
-    return { authorized: true, reason: null, membership };
-  } catch (err) {
-    if (err instanceof HttpError) throw err;
-    console.error(`${TAG} 💥 evaluateCheckin falhou para studentId=${studentId}`);
-    console.error(`${TAG}    ${err.message}`);
-    throw new HttpError(500, 'Erro ao avaliar check-in');
-  }
+  const now = new Date();
+  const membership = await prisma.membership.findFirst({
+    where: {
+      studentId,
+      status: 'ATIVA',
+      startDate: { lte: now },
+      endDate: { gte: now },
+    },
+    orderBy: { endDate: 'desc' },
+  });
+  if (!membership) return { authorized: false, reason: 'Sem matrícula ativa', membership: null };
+  return { authorized: true, reason: null, membership };
 }
 
 router.post(
@@ -760,10 +639,10 @@ router.post(
   asyncHandler(async (req, res) => {
     const { studentId, type, reason } = req.validated;
     const { authorized, reason: denyReason, membership } = await evaluateCheckin(studentId);
+
     const checkin = await prisma.checkin.create({
       data: {
-        studentId,
-        type,
+        studentId, type,
         status: authorized ? 'AUTORIZADO' : 'NEGADO',
         reason: reason ?? denyReason ?? null,
         deviceId: req.device.id,
@@ -786,6 +665,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const { studentId, type, status, reason } = req.validated;
     const { membership } = await evaluateCheckin(studentId).catch(() => ({ membership: null }));
+
     const checkin = await prisma.checkin.create({
       data: {
         studentId, type, status,
@@ -829,7 +709,7 @@ router.get(
       if (to) where.createdAt.lte = to;
     }
     const take = Math.min(limit ?? 100, 500);
-    // ← NOVO (v2.3): safeQuery
+
     const checkins = await safeQuery(
       () => prisma.checkin.findMany({
         where,
@@ -853,7 +733,6 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const { studentId } = req.params;
-    // ← NOVO (v2.3): safeQuery
     const last = await safeQuery(
       () => prisma.checkin.findFirst({
         where: { studentId },
@@ -867,7 +746,7 @@ router.get(
 countRoute();
 
 // ============================================
-// 10. ROTAS — WORKOUTS
+// WORKOUTS
 // ============================================
 
 router.get(
@@ -876,23 +755,21 @@ router.get(
   asyncHandler(async (req, res) => {
     const { studentId } = req.params;
     const { status } = req.query;
-    // ← NOVO (v2.3): safeQuery
+
     const student = await safeQuery(
       () => prisma.student.findUnique({ where: { id: studentId } }),
       'workouts.findStudent'
     );
     if (!student) throw new HttpError(404, 'Aluno não encontrado');
+
     const where = { studentId };
     if (status) where.status = status;
-    // ← NOVO (v2.3): safeQuery
+
     const workouts = await safeQuery(
       () => prisma.workoutPlan.findMany({
         where,
         include: {
-          exercises: {
-            include: { exercise: true },
-            orderBy: { order: 'asc' },
-          },
+          exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
           creator: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -929,9 +806,7 @@ router.post(
 
     const workout = await prisma.workoutPlan.create({
       data: {
-        studentId,
-        createdBy: req.user.id,
-        name,
+        studentId, createdBy: req.user.id, name,
         description: description ?? null,
         startDate,
         endDate: endDate ?? null,
@@ -964,7 +839,6 @@ router.get(
   '/workouts/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    // ← NOVO (v2.3): safeQuery
     const workout = await safeQuery(
       () => prisma.workoutPlan.findUnique({
         where: { id: req.params.id },
@@ -991,11 +865,8 @@ router.patch(
     const existing = await prisma.workoutPlan.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Treino não encontrado');
     const workout = await prisma.workoutPlan.update({
-      where: { id },
-      data: req.validated,
-      include: {
-        exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
-      },
+      where: { id }, data: req.validated,
+      include: { exercises: { include: { exercise: true }, orderBy: { order: 'asc' } } },
     });
     res.json(workout);
   })
@@ -1042,10 +913,8 @@ router.post(
     const created = await prisma.workoutExercise.create({
       data: {
         workoutId, exerciseId, order: finalOrder,
-        sets: sets ?? null,
-        repetitions: repetitions ?? null,
-        weight: weight ?? null,
-        restSeconds: restSeconds ?? null,
+        sets: sets ?? null, repetitions: repetitions ?? null,
+        weight: weight ?? null, restSeconds: restSeconds ?? null,
         notes: notes ?? null,
       },
       include: { exercise: true },
@@ -1066,8 +935,7 @@ router.patch(
     });
     if (!existing) throw new HttpError(404, 'Exercício do treino não encontrado');
     const updated = await prisma.workoutExercise.update({
-      where: { id: exerciseId },
-      data: req.validated,
+      where: { id: exerciseId }, data: req.validated,
       include: { exercise: true },
     });
     res.json(updated);
@@ -1091,7 +959,7 @@ router.delete(
 countRoute();
 
 // ============================================
-// 11. ROTAS — EVOLUÇÃO
+// EVOLUTION
 // ============================================
 
 router.get(
@@ -1101,7 +969,6 @@ router.get(
     const { studentId } = req.params;
     const { exerciseId } = req.query;
 
-    // ← NOVO (v2.3): safeQuery
     const student = await safeQuery(
       () => prisma.student.findUnique({ where: { id: studentId } }),
       'evolution.findStudent'
@@ -1111,15 +978,12 @@ router.get(
     const where = { workout: { studentId } };
     if (exerciseId) where.exerciseId = exerciseId;
 
-    // ← NOVO (v2.3): safeQuery
     const records = await safeQuery(
       () => prisma.workoutExercise.findMany({
         where,
         include: {
           exercise: true,
-          workout: {
-            select: { id: true, name: true, startDate: true, status: true },
-          },
+          workout: { select: { id: true, name: true, startDate: true, status: true } },
         },
         orderBy: { workout: { startDate: 'asc' } },
       }),
@@ -1156,13 +1020,9 @@ router.get(
 countRoute();
 
 // ============================================
-// 12. ROTAS — INVITES (v2.2)
+// INVITES (v3.0 — com nonce persistido + revalidação HMAC)
 // ============================================
 
-/**
- * Helper interno: cria 1 Invite no banco.
- * Não faz validação de role — quem chama deve garantir.
- */
 async function createInvite({ studentId, email, phone, name, type, role, expiresInDays, createdById }) {
   const id = generateInviteId();
   const nonce = generateInviteNonce();
@@ -1174,9 +1034,7 @@ async function createInvite({ studentId, email, phone, name, type, role, expires
 
   const invite = await prisma.invite.create({
     data: {
-      id,
-      token,
-      hmac,
+      id, token, hmac, nonce,
       createdById,
       studentId: studentId ?? null,
       email: email ?? null,
@@ -1259,7 +1117,7 @@ router.get(
       status: status || 'PENDING',
       expiresAt: { gt: new Date() },
     };
-    // ← NOVO (v2.3): safeQuery
+
     const invites = await safeQuery(
       () => prisma.invite.findMany({
         where,
@@ -1294,7 +1152,6 @@ router.get(
     const { token } = req.params;
     if (!token || typeof token !== 'string') throw new HttpError(400, 'Token inválido');
 
-    // ← NOVO (v2.3): safeQuery
     const invite = await safeQuery(
       () => prisma.invite.findUnique({
         where: { token },
@@ -1306,6 +1163,20 @@ router.get(
     );
 
     if (!invite) throw new HttpError(404, 'Convite inválido');
+
+    // v3.0: revalida HMAC usando nonce persistido
+    const exp = Math.floor(invite.expiresAt.getTime() / 1000);
+    const hmacOk = verifyInviteHmac({
+      id: invite.id,
+      exp,
+      nonce: invite.nonce,
+      hmac: invite.hmac,
+    });
+    if (!hmacOk) {
+      log.warn('invite HMAC inválido', { reqId: req.id, inviteId: invite.id });
+      throw new HttpError(401, 'Convite inválido');
+    }
+
     if (invite.status === 'REVOKED') throw new HttpError(400, 'Convite cancelado');
     if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já utilizado');
     if (invite.expiresAt < new Date()) {
@@ -1347,6 +1218,17 @@ router.post(
     });
 
     if (!invite) throw new HttpError(404, 'Convite inválido');
+
+    // v3.0: revalida HMAC
+    const exp = Math.floor(invite.expiresAt.getTime() / 1000);
+    const hmacOk = verifyInviteHmac({
+      id: invite.id,
+      exp,
+      nonce: invite.nonce,
+      hmac: invite.hmac,
+    });
+    if (!hmacOk) throw new HttpError(401, 'Convite inválido');
+
     if (invite.status === 'REVOKED') throw new HttpError(400, 'Convite cancelado');
     if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já utilizado');
     if (invite.expiresAt < new Date()) throw new HttpError(400, 'Convite expirado');
@@ -1363,8 +1245,7 @@ router.post(
       const u = await tx.user.create({
         data: {
           name: invite.student?.name || invite.name || 'Aluno',
-          email,
-          password: hash,
+          email, password: hash,
           role: invite.type === 'STAFF' && invite.role ? invite.role : 'ALUNO',
           student: invite.studentId ? { connect: { id: invite.studentId } } : undefined,
         },
@@ -1424,8 +1305,7 @@ router.post(
     if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já aceito');
 
     const updated = await prisma.invite.update({
-      where: { id },
-      data: { status: 'REVOKED' },
+      where: { id }, data: { status: 'REVOKED' },
     });
     res.json(updated);
   })
@@ -1433,7 +1313,7 @@ router.post(
 countRoute();
 
 // ============================================
-// 13. ROTAS — STUDENT IMPORT (v2.2)
+// STUDENT IMPORT
 // ============================================
 
 router.post(
@@ -1442,23 +1322,17 @@ router.post(
   validate(studentImportSchema),
   asyncHandler(async (req, res) => {
     const { students } = req.validated;
-
     const out = { created: 0, skipped: 0, errors: [] };
 
     await prisma.$transaction(async (tx) => {
       for (const s of students) {
         try {
           const exists = await tx.student.findUnique({ where: { legacyId: s.legacyId } });
-          if (exists) {
-            out.skipped++;
-            continue;
-          }
+          if (exists) { out.skipped++; continue; }
           await tx.student.create({
             data: {
-              legacyId: s.legacyId,
-              name: s.name,
-              email: s.email ?? null,
-              phone: s.phone ?? null,
+              legacyId: s.legacyId, name: s.name,
+              email: s.email ?? null, phone: s.phone ?? null,
               birthDate: s.birthDate ?? null,
             },
           });
@@ -1475,9 +1349,81 @@ router.post(
 countRoute();
 
 // ============================================
-// 14. EXPORT
+// CRON / PING
 // ============================================
-console.log(`${TAG} ✔ ${routeCount} rotas registradas`);
-console.log(`${TAG} ✅ carregado com sucesso`);
+// GET /_ping — rota ultraleve usada pelos self-pings do cron.
+// Responde rápido, sem tocar no banco (o Prisma Postgres não tem cold start).
+router.get('/_ping', asyncHandler(async (req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
+}));
+countRoute();
+
+// POST /cron/ping — recebido pelo cron externo a cada 1 min.
+// Responde 202 imediatamente e dispara 5 self-pings em background,
+// espaçados de 20s, para manter a lambda quente.
+// NÃO toca no banco — o Prisma Postgres não precisa de warmup.
+const cronConfig = {
+  selfPings: Number(process.env.CRON_SELF_PINGS || 5),
+  intervalMs: Number(process.env.CRON_INTERVAL_MS || 20_000),
+};
+
+router.post('/cron/ping', asyncHandler(async (req, res) => {
+  if (!CRON_SECRET) {
+    return res.status(503).json({ error: 'Cron desabilitado (CRON_SECRET ausente)' });
+  }
+  const secret = req.headers['x-cron-secret'];
+  if (secret !== CRON_SECRET) {
+    log.warn('cron: secret inválido', { reqId: req.id, ip: req.ip });
+    return res.status(401).json({ error: 'Não autorizado' });
+  }
+
+  const cronReqId = req.id || 'cron';
+  log.info('cron: ping recebido', {
+    reqId: cronReqId,
+    selfPings: cronConfig.selfPings,
+    intervalMs: cronConfig.intervalMs,
+  });
+
+  // Dispara em background, sem bloquear a resposta
+  setImmediate(() => {
+    let sent = 0;
+    const timer = setInterval(async () => {
+      sent++;
+      const t0 = Date.now();
+      try {
+        // self-ping via HTTP interno, ou chamada direta se preferir.
+        // Aqui usamos fetch para exercitar o stack HTTP completo.
+        const base = process.env.SELF_URL
+          || `http://127.0.0.1:${process.env.PORT || 3333}`;
+        const r = await fetch(`${base}/api/v1/_ping`);
+        log.debug('cron: self-ping', {
+          reqId: cronReqId, attempt: sent, status: r.status, ms: Date.now() - t0,
+        });
+      } catch (err) {
+        log.warn('cron: self-ping falhou', {
+          reqId: cronReqId, attempt: sent, msg: err.message,
+        });
+      }
+      if (sent >= cronConfig.selfPings) {
+        clearInterval(timer);
+        log.info('cron: sequência concluída', { reqId: cronReqId, total: sent });
+      }
+    }, cronConfig.intervalMs);
+  });
+
+  res.status(202).json({
+    accepted: true,
+    selfPings: cronConfig.selfPings,
+    intervalMs: cronConfig.intervalMs,
+    ts: new Date().toISOString(),
+  });
+}));
+countRoute();
+
+// ============================================
+// EXPORT
+// ============================================
+log.info(`${routeCount} rotas registradas`);
+log.info('carregado com sucesso');
 
 export default router;
