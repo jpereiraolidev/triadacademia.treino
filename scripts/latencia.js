@@ -1,22 +1,18 @@
 // ============================================
-// scripts/medidor.js — Medidor contínuo (0, 1, 2, ... N min)
-// Triad Academia · v3.0
+// scripts/medidor.js — Medidor contínuo de latência
+// Triad Academia · v3.2
 //
 // Uso:
-//   node scripts/medidor.js                  → 9 ciclos (0 a 8 min)
-//   node scripts/medidor.js --ciclos=30      → 30 ciclos (0 a 29 min)
-//   node scripts/medidor.js --intervalo=60   → 60s entre INÍCIOS de ciclo
-//   node scripts/medidor.js --local          → localhost em vez de prod
+//   node scripts/medidor.js                  → 9 ciclos (0 a 8 min) em PROD
+//   node scripts/medidor.js --local          → 9 ciclos em LOCAL
+//   node scripts/medidor.js --ciclos=30      → 30 ciclos
+//   node scripts/medidor.js --intervalo=60   → 60s entre INÍCIOS
+//   node scripts/medidor.js --rotas=login,users
+//   node scripts/medidor.js --no-warmup      → pula o warm-up inicial
 //
-// Comportamento:
-//   Ciclo 1 → AGORA (t=0s)
-//   Ciclo 2 → t=60s
-//   Ciclo 3 → t=120s
-//   ...
-//   Ciclo N → t=(N-1)*60s
-//
-// O intervalo é entre INÍCIOS de ciclos, não entre fim/início.
-// Se o ciclo 1 levou 8s, o ciclo 2 começa 52s depois do fim do ciclo 1.
+// Ciclo 1 → AGORA
+// Ciclo 2 → t=60s
+// Ciclo N → t=(N-1)*60s
 // ============================================
 
 const args = process.argv.slice(2);
@@ -26,22 +22,29 @@ const getArg = (name, def) => {
 };
 
 const IS_LOCAL = args.includes('--local');
+const NO_WARMUP = args.includes('--no-warmup');
 const CICLOS = Number(getArg('ciclos', 9));
-const INTERVALO = Number(getArg('intervalo', 60)); // segundos
+const INTERVALO = Number(getArg('intervalo', 60));
 const REPETICOES = Number(getArg('repeticoes', 1));
 const FILTRO = getArg('rotas', null)?.split(',').map((s) => s.trim()) || null;
 
+// ============================================
+// ⚙️ CONFIGURAÇÃO
+// ============================================
 const CONFIG = {
   PROD_URL: 'https://triadacademiatreino.vercel.app',
   LOCAL_URL: 'http://localhost:3333',
   USERS: {
     admin: { email: 'admin@triad.com', password: 'admin12345' },
   },
-  TIMEOUT_MS: 30000,
+  TIMEOUT_MS: 60000,
 };
 
 const BASE = IS_LOCAL ? CONFIG.LOCAL_URL : CONFIG.PROD_URL;
 
+// ============================================
+// CORES
+// ============================================
 const C = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',
@@ -124,6 +127,9 @@ const TODAS_ROTAS = [
 
 const ROTAS = FILTRO ? TODAS_ROTAS.filter((r) => FILTRO.includes(r.id)) : TODAS_ROTAS;
 
+// ============================================
+// ESTADO
+// ============================================
 const state = { token: null };
 const historico = {};
 const temposInicio = [];
@@ -195,12 +201,47 @@ function stats(times) {
 }
 
 // ============================================
+// WARM-UP
+// ============================================
+async function warmup() {
+  console.log(`${C.dim}🔥 Warm-up (DNS + TLS + conexão)...${C.reset}`);
+
+  // 1. DNS + TLS warm (só /health, rápido)
+  const t0 = Date.now();
+  const h = await req('GET', '/health');
+  const dnsMs = Date.now() - t0;
+  console.log(`   ${C.gray}/health${C.reset}         ${h.status} em ${dnsMs.toFixed(0)}ms`);
+
+  // 2. Login warm (Argon2 + DB)
+  const t1 = Date.now();
+  const login = await req('POST', '/api/v1/auth/login', { body: CONFIG.USERS.admin });
+  const loginMs = Date.now() - t1;
+  if (login.data?.token) state.token = login.data.token;
+  console.log(`   ${C.gray}/auth/login${C.reset}     ${login.status} em ${loginMs.toFixed(0)}ms`);
+
+  // 3. Cada rota uma vez (descarta resultado)
+  for (const route of ROTAS) {
+    const t = Date.now();
+    const r = await req(route.method, route.path, {
+      body: route.body,
+      headers: buildHeaders(route),
+    });
+    if (route.tokenFrom && r.data?.token) state.token = r.data.token;
+    const ms = Date.now() - t;
+    const color = r.status >= 200 && r.status < 300 ? C.green : C.red;
+    console.log(`   ${C.gray}${route.label.padEnd(14)}${C.reset}  ${color}${r.status}${C.reset} em ${ms.toFixed(0)}ms`);
+  }
+
+  console.log(`${C.green}✔ Warm-up concluído${C.reset}\n`);
+}
+
+// ============================================
 // MAIN
 // ============================================
 (async () => {
   console.clear();
   console.log(`${C.bold}${C.magenta}╔══════════════════════════════════════════════════════════════════════╗`);
-  console.log(`║      MEDIDOR CONTÍNUO DE LATÊNCIA — TRIAD ACADEMIA · v3.0            ║`);
+  console.log(`║      MEDIDOR CONTÍNUO DE LATÊNCIA — TRIAD ACADEMIA · v3.2            ║`);
   console.log(`╚══════════════════════════════════════════════════════════════════════╝${C.reset}\n`);
 
   console.log(`  ${C.bold}Alvo        :${C.reset} ${C.cyan}${BASE}${C.reset}`);
@@ -209,27 +250,31 @@ function stats(times) {
   console.log(`  ${C.bold}Intervalo   :${C.reset} ${INTERVALO}s entre INÍCIOS de ciclo`);
   console.log(`  ${C.bold}Repetições  :${C.reset} ${REPETICOES}x por rota por ciclo`);
   console.log(`  ${C.bold}Rotas       :${C.reset} ${ROTAS.length}`);
+  console.log(`  ${C.bold}Warm-up     :${C.reset} ${NO_WARMUP ? 'desligado' : 'ligado'}`);
   console.log(`  ${C.bold}Duração     :${C.reset} ~${Math.round(((CICLOS - 1) * INTERVALO) / 60)} min\n`);
 
-  // Login inicial (rápido, antes do ciclo 1)
-  console.log(`${C.dim}🔑 Autenticando...${C.reset}`);
-  const loginInit = await req('POST', '/api/v1/auth/login', { body: CONFIG.USERS.admin });
-  if (loginInit.data?.token) {
-    state.token = loginInit.data.token;
-    console.log(`${C.green}✔${C.reset} Token admin obtido (${loginInit.ms.toFixed(0)}ms)\n`);
+  // Warm-up (opcional)
+  if (!NO_WARMUP) {
+    await warmup();
   } else {
-    console.log(`${C.red}✖${C.reset} Falha no login inicial (status=${loginInit.status})\n`);
+    // Sem warm-up, faz pelo menos o login inicial
+    console.log(`${C.dim}🔑 Login inicial (warm-up desligado)...${C.reset}`);
+    const loginInit = await req('POST', '/api/v1/auth/login', { body: CONFIG.USERS.admin });
+    if (loginInit.data?.token) {
+      state.token = loginInit.data.token;
+      console.log(`${C.green}✔${C.reset} Token admin obtido (${loginInit.ms.toFixed(0)}ms)\n`);
+    } else {
+      console.log(`${C.red}✖${C.reset} Falha no login inicial (status=${loginInit.status})\n`);
+    }
   }
 
-  // Executa ciclos com intervalos entre INÍCIOS
+  // Ciclos
   const tInicio = Date.now();
   for (let n = 1; n <= CICLOS; n++) {
     const minutosDecorridos = ((n - 1) * INTERVALO) / 60;
     const alvoInicio = tInicio + (n - 1) * INTERVALO * 1000;
-    const agora = Date.now();
-    const esperaMs = alvoInicio - agora;
+    const esperaMs = alvoInicio - Date.now();
 
-    // Antes do ciclo 1, espera 0. Antes do 2, espera o resto até 60s, etc.
     if (esperaMs > 0) {
       console.log(`${C.dim}   ⏳ aguardando ${(esperaMs / 1000).toFixed(1)}s até o ciclo ${n}...${C.reset}`);
       await sleep(esperaMs);
@@ -259,16 +304,15 @@ function stats(times) {
     console.log(`  ${String(n).padStart(5)}  ${String(minutosDecorridos.toFixed(0)).padStart(4)}m  ${cells.join('  ')}`);
   }
 
-  // Verifica cadência real
+  // Cadência
   console.log(`\n${C.bold}${C.cyan}▶ Cadência dos ciclos${C.reset}\n`);
   for (let i = 1; i < temposInicio.length; i++) {
     const deltaMs = temposInicio[i].t - temposInicio[i - 1].t;
     const deltaS = (deltaMs / 1000).toFixed(1);
-    const esperado = INTERVALO;
-    const diff = Math.abs(deltaMs / 1000 - esperado);
+    const diff = Math.abs(deltaMs / 1000 - INTERVALO);
     const corDiff = diff < 2 ? C.green : diff < 10 ? C.yellow : C.red;
     console.log(
-      `  Ciclo ${i} → ${i + 1}: ${deltaS}s ${C.dim}(esperado ${esperado}s, diff ${diff.toFixed(1)}s)${C.reset} ${corDiff}${diff < 2 ? '✔' : '⚠'}${C.reset}`
+      `  Ciclo ${i} → ${i + 1}: ${deltaS}s ${C.dim}(esperado ${INTERVALO}s, diff ${diff.toFixed(1)}s)${C.reset} ${corDiff}${diff < 2 ? '✔' : '⚠'}${C.reset}`
     );
   }
 

@@ -57,3 +57,4 @@ desktop.ini
 # Build
 dist/
 build/
+scripts/test_dbres.js

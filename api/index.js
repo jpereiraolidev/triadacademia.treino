@@ -25,9 +25,21 @@ const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-app.use(helmet());
+// ============================================
+// HELMET
+// ============================================
+// ⬅️ MUDOU: adicionado crossOriginResourcePolicy: 'cross-origin'
+// pra permitir que o navegador aceite respostas cross-origin
+// (o front em 127.0.0.1:5500 precisa ler a resposta da API em Vercel).
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
 app.use(securityExtra);
 
+// ============================================
+// CORS
+// ============================================
 try {
   const rawOrigin = process.env.CORS_ORIGIN;
   const corsOrigin = rawOrigin
@@ -36,27 +48,44 @@ try {
 
   app.use(cors({
     origin: corsOrigin,
-    credentials: true,
+    // ⬅️ MUDOU: removido credentials: true
+    // O front usa Bearer token no header Authorization (não cookie),
+    // então credentials: true era redundante e quebrava o CORS
+    // quando origin era '*'.
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
-      'Content-Type', 'Authorization', 'X-Device-Key',
-      'X-Cron-Secret', 'X-Request-Id',
+      'Content-Type',
+      'Authorization',
+      'X-Device-Key',
+      'X-Cron-Secret',
+      'X-Request-Id',
     ],
+    // ⬅️ MUDOU: cache do preflight por 24h (evita OPTIONS repetido)
+    maxAge: 86400,
   }));
+
   log.info(`cors aplicado (origin=${Array.isArray(corsOrigin) ? corsOrigin.join(',') : corsOrigin})`);
 } catch (err) {
   log.fatal(`falha ao aplicar CORS: ${err.message}`);
   throw err;
 }
 
+// ============================================
+// BODY PARSER
+// ============================================
 app.use(express.json({ limit: '1mb' }));
 
+// ============================================
+// MIDDLEWARES CUSTOM
+// ============================================
 app.use(requestId);
 app.use(requestLogger);
 app.use(apiLimiter);
 app.use(warmupGlobal);
 
-// ---------- HEALTH ----------
+// ============================================
+// HEALTH
+// ============================================
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
 });
@@ -72,15 +101,21 @@ app.get('/health/warm', noCache, async (req, res) => {
   });
 });
 
-// ---------- /api/v1 ----------
+// ============================================
+// /api/v1
+// ============================================
 app.use('/api/v1', router);
 
-// ---------- 404 + ERROR ----------
+// ============================================
+// 404 + ERROR
+// ============================================
 app.use(notFound);
 app.use(errorLogger);
 app.use(errorHandler);
 
-// ---------- CRASH GUARDS ----------
+// ============================================
+// CRASH GUARDS
+// ============================================
 process.on('uncaughtException', (err) => {
   log.fatal('uncaughtException', { msg: err?.message });
 });
@@ -90,7 +125,9 @@ process.on('unhandledRejection', (reason) => {
   log.fatal('unhandledRejection', { msg });
 });
 
-// ---------- START (fora da Vercel) ----------
+// ============================================
+// START (fora da Vercel)
+// ============================================
 if (!process.env.VERCEL) {
   const server = app.listen(PORT, () => {
     console.log('');
@@ -125,5 +162,7 @@ if (!process.env.VERCEL) {
   process.once('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-// ---------- EXPORT VERCEL ----------
+// ============================================
+// EXPORT VERCEL
+// ============================================
 export default app;
