@@ -611,26 +611,51 @@ countRoute();
 // ============================================
 // CHECKINS
 // ============================================
-
+// Substitua a função evaluateCheckin antiga por esta:
 async function evaluateCheckin(studentId) {
-  const student = await prisma.student.findUnique({ where: { id: studentId } });
-  if (!student) throw new HttpError(404, 'Aluno não encontrado');
-  if (!student.active) return { authorized: false, reason: 'Aluno inativo', membership: null };
+  // 1. Tenta achar o aluno pelo ID do Prisma (formato normal)
+  let student = await prisma.student.findUnique({ where: { id: studentId } });
+  
+  // 2. Se não achou, tenta achar pelo CPF (porque o Gateway envia o CPF)
+  if (!student) {
+    student = await prisma.student.findFirst({ 
+      where: { 
+        OR: [
+          { cpf: studentId },
+          { legacyId: studentId } // Caso você use o CPF no legacyId
+        ]
+      } 
+    });
+  }
+
+  // 3. Se não encontrou ninguém, retorna erro limpo (sem quebrar o Prisma)
+  if (!student) {
+    return { authorized: false, reason: 'Aluno não encontrado no banco da Nuvem.', membership: null, student: null };
+  }
+
+  if (!student.active) {
+    return { authorized: false, reason: 'Aluno inativo', membership: null, student };
+  }
 
   const now = new Date();
   const membership = await prisma.membership.findFirst({
     where: {
-      studentId,
+      studentId: student.id, // Usa o ID REAL que o Prisma achou
       status: 'ATIVA',
       startDate: { lte: now },
       endDate: { gte: now },
     },
     orderBy: { endDate: 'desc' },
   });
-  if (!membership) return { authorized: false, reason: 'Sem matrícula ativa', membership: null };
-  return { authorized: true, reason: null, membership };
+
+  if (!membership) {
+    return { authorized: false, reason: 'Sem matrícula ativa', membership: null, student };
+  }
+
+  return { authorized: true, reason: null, membership, student };
 }
 
+// Substitua a rota POST /checkins/device antiga por esta:
 router.post(
   '/checkins/device',
   deviceLimiter,
@@ -638,11 +663,17 @@ router.post(
   validate(checkinCreateSchema),
   asyncHandler(async (req, res) => {
     const { studentId, type, reason } = req.validated;
-    const { authorized, reason: denyReason, membership } = await evaluateCheckin(studentId);
+    const { authorized, reason: denyReason, membership, student } = await evaluateCheckin(studentId);
+
+    // Se o aluno não foi encontrado pelo CPF ou ID, nem cria o checkin no banco
+    if (!student) {
+      return res.status(404).json({ error: denyReason || 'Aluno não encontrado na nuvem.' });
+    }
 
     const checkin = await prisma.checkin.create({
       data: {
-        studentId, type,
+        studentId: student.id, // Usa o ID real
+        type,
         status: authorized ? 'AUTORIZADO' : 'NEGADO',
         reason: reason ?? denyReason ?? null,
         deviceId: req.device.id,
@@ -653,6 +684,7 @@ router.post(
         device: { select: { id: true, name: true } },
       },
     });
+    
     res.status(authorized ? 201 : 403).json(checkin);
   })
 );

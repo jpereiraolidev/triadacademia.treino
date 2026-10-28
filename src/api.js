@@ -113,23 +113,22 @@ try {
   process.exit(1);
 }
 
-// ---------- routers.js ----------
+// ---------- routes.js ----------
 try {
-  router = (await import('./routers.js')).default;
+  router = (await import('./routes.js')).default;
   if (!router || typeof router !== 'function') {
-    console.error(`${TAG} 💥 routers.js não exportou um Router válido (export default router)`);
+    console.error(`${TAG} 💥 routes.js não exportou um Router válido (export default router)`);
     process.exit(1);
   }
-  console.log(`${TAG} ✔ routers.js carregado`);
+  console.log(`${TAG} ✔ routes.js carregado`);
 } catch (err) {
-  console.error(`${TAG} 💥 Falha ao importar './routers.js'`);
-  console.error(`${TAG}    Causa provável: routers.js não existe, tem erro de sintaxe,`);
+  console.error(`${TAG} 💥 Falha ao importar './routes.js'`);
+  console.error(`${TAG}    Causa provável: routes.js não existe, tem erro de sintaxe,`);
   console.error(`${TAG}    ou faltam schemas/middlewares exportados por config.js/auth.js.`);
   console.error(`${TAG}    Detalhe: ${err.message}`);
   if (err.stack) console.error(err.stack);
   process.exit(1);
 }
-
 const { prisma, PORT, redactForLog, HttpError } = config;
 
 // ============================================
@@ -202,7 +201,7 @@ app.use(async (req, res, next) => {
   if (req.path === '/health') return next();
 
   // Fire-and-forget: não espera, não bloqueia, não propaga erro
-  warmupDb(3000).catch((err) => {
+  warmupDb(10000).catch((err) => {
     // warmupDb já loga internamente; aqui é só para não vazar Promise
     if (process.env.NODE_ENV === 'development') {
       console.log(`${TAG} ⚠ warmupDb background falhou: ${err.message}`);
@@ -219,7 +218,7 @@ app.get('/health', async (req, res) => {
   // Com ?warm=1, faz SELECT 1 para diagnóstico.
   if (req.query.warm === '1') {
     const t0 = Date.now();
-    const result = await warmupDb(5000);
+    const result = await warmupDb(10000);
     const ms = Date.now() - t0;
     return res.json({
       status: result.ok ? 'ok' : 'degraded',
@@ -234,6 +233,11 @@ console.log(`${TAG} ✔ rota /health registrada (com ?warm=1 opcional)`);
 // ---------- /api/v1 ----------
 app.use('/api/v1', router);
 console.log(`${TAG} ✔ router montado em /api/v1`);
+
+// ---------- /api/v1 (rotas extras de integração) ----------
+const { default: integracaoRouter } = await import('./integracao.js');
+app.use('/api/v1', integracaoRouter);
+console.log(`${TAG} ✔ integracao.js montado em /api/v1 (payments/products/sales/settings/checkins)`);
 
 // ---------- 404 ----------
 app.use((req, res) => {

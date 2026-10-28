@@ -1,5 +1,5 @@
 // ============================================
-// schema.prisma — Triad Academia · v3.0
+// schema.prisma — Triad Academia · v3.1
 // ============================================
 // Modelo de dados profissional, com:
 //   - Invite seguro (id + exp + nonce + hmac revalidável)
@@ -7,6 +7,13 @@
 //   - Soft delete padronizado (active)
 //   - Preços em Decimal(10,2) (nunca Float)
 //   - Índices otimizados para os padrões de query do routes.js
+//
+// v3.1 (sobre v3.0):
+//   - + Payment  (integração financeira)
+//   - + Product  (estoque do balcão)
+//   - + Sale     (vendas do balcão)
+//   - + Settings (configuração global)
+//   - Relações inversas adicionadas em User, Student, Membership
 //
 // Decisões de modelagem (v3.0):
 //   - Membership: múltiplas ativas permitidas (validação na app)
@@ -97,6 +104,10 @@ model User {
   createdWorkouts WorkoutPlan[] @relation("WorkoutCreator")
   checkins        Checkin[]     @relation("CheckinRegisteredBy")
 
+  // v3.1 — integracao.js
+  paymentsRegistrados Payment[] @relation("PaymentRegisteredBy")
+  salesRegistradas    Sale[]    @relation("SaleRegisteredBy")
+
   // Vínculo 1:1 opcional com Student (o FK fica em Student)
   student Student? @relation("UserStudent")
 
@@ -139,6 +150,9 @@ model Student {
   workoutPlans WorkoutPlan[]
   memberships  Membership[]
   checkins     Checkin[]
+
+  // v3.1 — integracao.js
+  payments Payment[]
 
   // Vínculo 1:1 com User
   user User? @relation("UserStudent", fields: [userId], references: [id], onDelete: SetNull)
@@ -200,6 +214,9 @@ model Membership {
   plan    Plan    @relation(fields: [planId], references: [id], onDelete: Restrict)
 
   checkins Checkin[]
+
+  // v3.1 — integracao.js
+  payments Payment[]
 
   @@index([studentId, status])
   @@index([studentId, endDate])
@@ -418,4 +435,149 @@ model Invite {
   @@index([status, expiresAt])
   @@index([status, sentAt])
   @@index([createdById])
+}
+
+// ============================================
+// PAYMENT — v3.1 (adicionado para integracao.js)
+// ============================================
+// Pagamentos avulsos de mensalidade.
+// Separado de Membership porque:
+//   - Membership = contrato (início, fim, plano, preço)
+//   - Payment    = transação financeira (quando, quanto, forma)
+// Um aluno pode ter N pagamentos para a mesma Membership
+// (ex.: mensalidade + taxa de matrícula + reajuste).
+//
+// origem distingue pagamento de mensalidade (FINANCEIRO)
+// de venda de balcão (BALCAO) que também passa pelo caixa.
+// ============================================
+model Payment {
+  id String @id @default(cuid())
+
+  studentId    String
+  membershipId String?
+
+  valor         Decimal @db.Decimal(10, 2)
+  valorRecebido Decimal @db.Decimal(10, 2)
+  troco         Decimal @db.Decimal(10, 2) @default(0)
+
+  forma String @db.VarChar(20) // PIX | DINHEIRO | CREDITO | DEBITO
+
+  vencimentoAnterior DateTime?
+  novoVencimento     DateTime?
+
+  origem     String  @default("FINANCEIRO") @db.VarChar(20) // FINANCEIRO | BALCAO
+  observacao String? @db.Text
+
+  registradoPor String
+
+  createdAt DateTime @default(now())
+
+  student        Student     @relation(fields: [studentId],    references: [id], onDelete: Restrict)
+  membership     Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  registeredUser User        @relation("PaymentRegisteredBy",  fields: [registradoPor], references: [id], onDelete: Restrict)
+
+  @@index([studentId, createdAt])
+  @@index([membershipId])
+  @@index([registradoPor])
+  @@index([createdAt])
+  @@index([origem, createdAt])
+}
+
+// ============================================
+// PRODUCT — v3.1 (adicionado para integracao.js)
+// ============================================
+// Estoque do balcão (suplementos, bebidas, acessórios).
+// valorCompra e valorVenda em Decimal (nunca Float).
+// Soft delete via active (mesmo padrão do resto do schema).
+// ============================================
+model Product {
+  id String @id @default(cuid())
+
+  nome      String  @db.VarChar(120)
+  categoria String? @db.VarChar(60)
+
+  quantidade Int @default(0)
+
+  valorCompra Decimal @db.Decimal(10, 2) @default(0)
+  valorVenda  Decimal @db.Decimal(10, 2) @default(0)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales Sale[]
+
+  @@index([nome])
+  @@index([categoria])
+  @@index([active])
+}
+
+// ============================================
+// SALE — v3.1 (adicionado para integracao.js)
+// ============================================
+// Venda de balcão. Snapshot de produtoNome/categoria para
+// preservar histórico mesmo se o Product for renomeado/excluído.
+//
+// A baixa de estoque (decrement em Product.quantidade) é feita
+// na camada de aplicação (integracao.js), dentro de $transaction,
+// junto com a criação da Sale.
+// ============================================
+model Sale {
+  id String @id @default(cuid())
+
+  produtoId   String
+  produtoNome String  @db.VarChar(120)
+  categoria   String? @db.VarChar(60)
+
+  quantidade    Int
+  valorUnitario Decimal @db.Decimal(10, 2)
+  total         Decimal @db.Decimal(10, 2)
+
+  valorRecebido  Decimal @db.Decimal(10, 2)
+  valorDevolvido Decimal @db.Decimal(10, 2) @default(0)
+
+  forma String @db.VarChar(20) // PIX | DINHEIRO | CREDITO | DEBITO
+
+  registeredBy String
+
+  createdAt DateTime @default(now())
+
+  product        Product @relation(fields: [produtoId],     references: [id], onDelete: Restrict)
+  registeredUser User    @relation("SaleRegisteredBy",      fields: [registeredBy], references: [id], onDelete: Restrict)
+
+  @@index([produtoId])
+  @@index([registeredBy])
+  @@index([createdAt])
+}
+
+// ============================================
+// SETTINGS — v3.1 (adicionado para integracao.js)
+// ============================================
+// Configuração global da academia (linha única, id=1).
+// Não usa soft delete (não faz sentido excluir "as configurações").
+// O integracao.js faz upsert com id=1 e cria defaults na 1ª leitura.
+//
+// Os campos espelham o que o frontend React espera em
+// GET /api/v1/settings e PUT /api/v1/settings.
+// ============================================
+model Settings {
+  id Int @id @default(1)
+
+  nomeAcademia     String  @default("TRIAD Academia") @db.VarChar(120)
+  subtituloSistema String  @default("Academia")       @db.VarChar(120)
+  logoAcademia     String? @db.VarChar(2000)
+  corPrincipal     String  @default("#2563eb")        @db.VarChar(20)
+
+  valorMensalidadePadrao Decimal @default(0) @db.Decimal(10, 2)
+  diasTolerancia         Int     @default(0)
+
+  bloquearVencidos String @default("sim") @db.VarChar(3) // "sim" | "nao"
+
+  mensagemBomTreino    String @default("Acesso liberado. Bom treino!")           @db.VarChar(500)
+  mensagemAcessoNegado String @default("Acesso bloqueado. Procure a recepção.")  @db.VarChar(500)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
 }
