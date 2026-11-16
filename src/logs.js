@@ -1,17 +1,21 @@
 // ============================================
 // src/logs.js — Logger + email (Resend SDK) + DB + flush
-// Triad Academia · v3.4
+// Triad Academia · v3.5
 //
-// Mudanças v3.4 (sobre v3.3):
-//   - flush() público para aguardar email + DB em testes/shutdown
-//   - trackPromise rastreia persistLog e sendEmailAlert
-//   - Confirmação de email enviado no stderr (id do Resend)
-//   - Exports organizados no final (evita erro de ordem)
+// v3.5 (sobre v3.4) — "não quero que besteira me acorde":
+//   - Filtro de ruído conhecido: JSON malformado, payload grande,
+//     token ausente, 401/403/429, rota não encontrada — NUNCA alertam
+//     (mesmo que alguém chame log.error por engano)
+//   - Dedup mais agressivo: cooldown 10min (era 5min), 3/minuto (era 5)
+//   - ALERT_ONLY_FATAL=1 → só FATAL (uncaughtException) manda email
+//   - ALERT_DISABLE_EMAIL=1 → desliga email (só DB + stream)
+//   - ALERT_DISABLE_DB=1 → desliga DB (já existia)
 //
 // Uso:
 //   import { log, flush, newReqId, redact, requestContext } from './logs.js';
 //   log.error('banco caiu', { code: 'P1001' });   // email + DB
-//   await flush(10000);                           // espera pendências
+//   log.warn('auth negado', { ... });             // só stream, sem email
+//   await flush(10000);
 // ============================================
 
 import crypto from 'node:crypto';
@@ -39,7 +43,7 @@ const LEVEL_COLORS = {
 };
 
 // ============================================
-// ALERTAS — CONFIG
+// ALERTAS — CONFIG (v3.5)
 // ============================================
 const ALERT = {
   resendApi: process.env.RESEND_API || '',
@@ -48,22 +52,34 @@ const ALERT = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
-  cooldownMs: Number(process.env.ALERT_COOLDOWN_MS || 5 * 60 * 1000),
-  maxPerMinute: Number(process.env.ALERT_MAX_PER_MINUTE || 5),
+
+  // v3.5: dedup mais agressivo
+  cooldownMs: Number(process.env.ALERT_COOLDOWN_MS || 10 * 60 * 1000),   // 10min (era 5)
+  maxPerMinute: Number(process.env.ALERT_MAX_PER_MINUTE || 3),            // 3 (era 5)
+
   timeoutMs: Number(process.env.ALERT_TIMEOUT_MS || 8000),
-  disableDb: process.env.ALERT_DISABLE_DB === '1',
-  persistAll: process.env.ALERT_PERSIST_ALL === '1',
+
+  // v3.5: flags de "não me acorde por besteira"
+  onlyFatal: process.env.ALERT_ONLY_FATAL === '1',       // só FATAL manda email
+  disableEmail: process.env.ALERT_DISABLE_EMAIL === '1', // desliga email (só DB + stream)
+  disableDb: process.env.ALERT_DISABLE_DB === '1',       // desliga DB
+  persistAll: process.env.ALERT_PERSIST_ALL === '1',     // persistir warn/info também (NÃO recomendado)
 };
 
-const emailEnabled = Boolean(ALERT.resendApi && ALERT.toEmails.length > 0);
+const emailEnabled = Boolean(
+  ALERT.resendApi && ALERT.toEmails.length > 0 && !ALERT.disableEmail
+);
 const resend = emailEnabled ? new Resend(ALERT.resendApi) : null;
 
 if (isDev) {
   console.log(
     `[logs.js] email alerts: ${emailEnabled ? 'ON' : 'OFF'} ` +
-    `(${ALERT.toEmails.length} destinatários)`
+    `(${ALERT.toEmails.length} destinatários)` +
+    `${ALERT.onlyFatal ? ' [APENAS FATAL]' : ''}` +
+    `${ALERT.disableEmail ? ' [DESLIGADO]' : ''}`
   );
   console.log(`[logs.js] DB persist: ${ALERT.disableDb ? 'OFF' : 'ON'}`);
+  console.log(`[logs.js] dedup: cooldown=${ALERT.cooldownMs}ms max=${ALERT.maxPerMinute}/min`);
   if (emailEnabled) {
     console.log(`[logs.js] resend key: ${ALERT.resendApi.slice(0, 6)}…`);
   }
@@ -182,7 +198,7 @@ function writeStream(levelNum, line) {
 }
 
 // ============================================
-// ANTI-SPAM
+// ANTI-SPAM (v3.5: mais agressivo)
 // ============================================
 const alertState = { lastByKey: new Map(), minuteWindow: [] };
 
@@ -203,6 +219,39 @@ function shouldSendAlert(key) {
     }
   }
   return true;
+}
+
+// ============================================
+// v3.5: FILTRO DE RUÍDO CONHECIDO
+// ============================================
+// Mesmo que alguém chame log.error(), estes padrões NUNCA alertam:
+//   - JSON malformado (entity.parse.failed)
+//   - Payload grande (entity.too.large)
+//   - Token ausente/inválido (401)
+//   - Rate limit (429)
+//   - Auth negado (403)
+// Esses são erros do cliente, não do servidor.
+const NOISE_PATTERNS = [
+  /entity\.parse\.failed/i,
+  /entity\.too\.large/i,
+  /JSON inválido/i,
+  /payload muito grande/i,
+  /Token ausente/i,
+  /Token inválido/i,
+  /Token expirado/i,
+  /Credenciais inválidas/i,
+  /rate limit/i,
+  /auth negado/i,
+  /X-Device-Key ausente/i,
+  /Device inválido/i,
+  /Rota não encontrada/i,
+  /não encontrado/i,
+  /não encontrada/i,
+];
+
+function isKnownNoise(msg, meta) {
+  const text = `${msg} ${meta?.msg || ''} ${meta?.name || ''}`;
+  return NOISE_PATTERNS.some((re) => re.test(text));
 }
 
 // ============================================
@@ -349,11 +398,12 @@ function persistLog(level, tag, msg, meta, reqId) {
 }
 
 // ============================================
-// CORE
+// CORE (v3.5: filtro de ruído)
 // ============================================
 function emit(levelNum, levelName, tag, msg, meta, reqId, forceAlert = false) {
   const finalReqId = reqId || getReqIdFromContext();
 
+  // 1. Stream (sempre, respeitando minLevel)
   if (levelNum >= minLevel) {
     const line = isDev
       ? formatDev(levelName, tag, msg, meta, finalReqId)
@@ -361,14 +411,25 @@ function emit(levelNum, levelName, tag, msg, meta, reqId, forceAlert = false) {
     writeStream(levelNum, line);
   }
 
+  // 2. É crítico? (ERROR/FATAL/ALERT)
   const isCritical = forceAlert || levelNum >= LEVELS.error;
-  if (!isCritical && !ALERT.persistAll) return;
+  if (!isCritical) return;
 
+  // 3. v3.5: filtro de ruído conhecido
+  // Mesmo que seja ERROR, se for JSON malformado / 401 / 429, NÃO alerta
+  if (isKnownNoise(msg, meta)) return;
+
+  // 4. v3.5: ALERT_ONLY_FATAL → só FATAL manda email
+  if (ALERT.onlyFatal && levelNum < LEVELS.fatal) return;
+
+  // 5. Persiste no DB (sempre crítico, respeitando disableDb)
+  persistLog(levelName, tag, msg, meta, finalReqId);
+
+  // 6. Email (respeitando dedup + disableEmail)
   const key = `${levelName}|${tag}|${msg}`;
-  const canEmail = shouldSendAlert(key);
-
-  if (isCritical) persistLog(levelName, tag, msg, meta, finalReqId);
-  if (isCritical && canEmail) sendEmailAlert(levelName, tag, msg, meta, finalReqId);
+  if (shouldSendAlert(key)) {
+    sendEmailAlert(levelName, tag, msg, meta, finalReqId);
+  }
 }
 
 // ============================================
@@ -400,7 +461,7 @@ function makeLogger(tag = '') {
 }
 
 // ============================================
-// EXPORTS (no final, na ordem certa)
+// EXPORTS
 // ============================================
 export const log = makeLogger('');
 export function newReqId() { return crypto.randomBytes(8).toString('hex'); }
@@ -411,5 +472,7 @@ log.info('logs.js carregado', {
   env: process.env.NODE_ENV || 'development',
   format: isDev ? 'dev' : 'json',
   email: emailEnabled ? `on (${ALERT.toEmails.length} dest.)` : 'off',
+  onlyFatal: ALERT.onlyFatal,
+  disableEmail: ALERT.disableEmail,
   db: ALERT.disableDb ? 'off' : 'on',
 });

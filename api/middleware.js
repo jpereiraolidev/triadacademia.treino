@@ -1,11 +1,10 @@
 // ============================================
 // api/middleware.js — Middlewares customizados
-// Triad Academia · v3.2
+// Triad Academia · v3.3
 //
-// Mudanças v3.2 (sobre v3.1):
-//   - errorLogger trata entity.parse.failed e entity.too.large
-//     como log.warn (sem email), não como "erro inesperado".
-//     JSON malformado de bot NÃO deve acordar o dev.
+// v3.3 (sobre v3.2):
+//   - requestLogger NÃO loga req.out quando status >= 500.
+//     O errorLogger já logou o erro — evita 2 emails por 500.
 // ============================================
 
 import { log as rootLog, newReqId, requestContext } from '../src/logs.js';
@@ -24,9 +23,6 @@ export function requestId(req, res, next) {
     : newReqId();
   res.setHeader('X-Request-Id', req.id);
 
-  // Executa o resto da request dentro do contexto com reqId.
-  // Qualquer log.* (inclusive dentro de safeQuery) pega o reqId
-  // automaticamente e correlaciona email/DB/log.
   requestContext.run({ reqId: req.id }, () => next());
 }
 
@@ -68,8 +64,14 @@ export function requestLogger(req, res, next) {
         ms,
         bytes,
       };
-      if (res.statusCode >= 500) log.error('req.out', meta);
-      else if (res.statusCode >= 400) log.warn('req.out', meta);
+
+      // v3.3: 5xx NÃO loga req.out — o errorLogger já logou
+      // (evita 2 emails por 500)
+      if (res.statusCode >= 500) {
+        return;
+      }
+
+      if (res.statusCode >= 400) log.warn('req.out', meta);
       else log.info('req.out', meta);
     }
   };
@@ -152,8 +154,7 @@ export function notFound(req, res) {
 // 8. errorLogger
 // ============================================
 export function errorLogger(err, req, res, next) {
-  // --- v3.2: JSON malformado e payload grande NÃO são "inesperados" ---
-  // São erros do cliente, não do servidor. Não devem disparar email.
+  // v3.2: JSON malformado e payload grande NÃO são "inesperados"
   if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && 'body' in err)) {
     log.warn('JSON malformado no corpo da requisição', {
       reqId: req.id,
@@ -184,10 +185,8 @@ export function errorLogger(err, req, res, next) {
   if (err instanceof HttpError) {
     log.info('erro esperado (HttpError)', meta);
   } else if (err?.code && String(err.code).startsWith('P')) {
-    // Prisma conhecido: loga como error (dispara email+DB via logs.js)
     log.error('erro Prisma', { ...meta, err });
   } else {
-    // Inesperado: loga como error com o Error completo
     log.error('erro inesperado', { ...meta, err });
     if (process.env.NODE_ENV === 'development' && err?.stack) {
       log.debug('stack', { reqId: req.id, stack: err.stack });
@@ -216,31 +215,19 @@ export function errorHandler(err, req, res, next) {
   if (res.headersSent) return next(err);
 
   if (err instanceof HttpError) {
-    return res.status(err.status).json({
-      error: err.message,
-      reqId: req.id,
-    });
+    return res.status(err.status).json({ error: err.message, reqId: req.id });
   }
 
   if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && 'body' in err)) {
-    return res.status(400).json({
-      error: 'JSON inválido no corpo da requisição',
-      reqId: req.id,
-    });
+    return res.status(400).json({ error: 'JSON inválido no corpo da requisição', reqId: req.id });
   }
   if (err.type === 'entity.too.large') {
-    return res.status(413).json({
-      error: 'Payload muito grande',
-      reqId: req.id,
-    });
+    return res.status(413).json({ error: 'Payload muito grande', reqId: req.id });
   }
 
   if (err.code && PRISMA_ERRORS[err.code]) {
     const { status, message } = PRISMA_ERRORS[err.code];
-    return res.status(status).json({
-      error: message,
-      reqId: req.id,
-    });
+    return res.status(status).json({ error: message, reqId: req.id });
   }
 
   res.status(500).json({
