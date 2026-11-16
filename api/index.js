@@ -118,6 +118,11 @@ app.get('/health', async (req, res) => {
     ts: new Date().toISOString(),
   });
 });
+// api/index.js — ADICIONE (temporário)
+app.get('/_test-fatal', (req, res) => {
+  process.nextTick(() => { throw new Error('TESTE FATAL — ignore'); });
+  res.json({ ok: true, msg: 'crash em 100ms' });
+});
 
 app.get('/health/warm', noCache, async (req, res) => {
   const t0 = Date.now();
