@@ -118,10 +118,38 @@ app.get('/health', async (req, res) => {
     ts: new Date().toISOString(),
   });
 });
-// api/index.js — ADICIONE (temporário)
-app.get('/_test-fatal', (req, res) => {
-  process.nextTick(() => { throw new Error('TESTE FATAL — ignore'); });
-  res.json({ ok: true, msg: 'crash em 100ms' });
+// ============================================
+// api/index.js — TESTE FATAL (temporário)
+// ⚠️  REMOVER DEPOIS DO TESTE
+// ============================================
+import { flush } from '../src/logs.js';
+
+app.get('/_test-fatal', async (req, res) => {
+  // Protege com CRON_SECRET (só você pode chamar)
+  const secret = req.headers['x-test-secret'];
+  if (secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Não autorizado' });
+  }
+
+  // 1. Loga o fatal (dispara email + DB via logs.js)
+  const { log: rootLog } = await import('../src/logs.js');
+  const log = rootLog.child('[test] ');
+  log.fatal('TESTE FATAL — ignore este email', {
+    op: 'test-fatal',
+    ts: new Date().toISOString(),
+  });
+
+  // 2. Espera o email/DB saírem ANTES do crash
+  await flush(5000);
+
+  // 3. Responde (o cliente vê 200 antes do crash)
+  res.json({ ok: true, msg: 'crash em ~100ms (se o flush falhou)' });
+
+  // 4. Força o uncaughtException DEPOIS de responder
+  //    (process.nextTick garante que a response já foi enviada)
+  process.nextTick(() => {
+    throw new Error('TESTE FATAL — ignore');
+  });
 });
 
 app.get('/health/warm', noCache, async (req, res) => {
