@@ -124,32 +124,20 @@ app.get('/health', async (req, res) => {
 // ============================================
 import { flush } from '../src/logs.js';
 
+// api/index.js — rota _test-fatal (CORRIGIDA v2)
 app.get('/_test-fatal', async (req, res) => {
-  // Protege com CRON_SECRET (só você pode chamar)
-  const secret = req.headers['x-test-secret'];
-  if (secret !== process.env.CRON_SECRET) {
+  if (req.headers['x-test-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Não autorizado' });
   }
 
-  // 1. Loga o fatal (dispara email + DB via logs.js)
-  const { log: rootLog } = await import('../src/logs.js');
-  const log = rootLog.child('[test] ');
-  log.fatal('TESTE FATAL — ignore este email', {
-    op: 'test-fatal',
-    ts: new Date().toISOString(),
-  });
+  // Responde 200 PRIMEIRO (cliente vê "ok")
+  res.json({ ok: true, msg: 'crash em ~100ms' });
 
-  // 2. Espera o email/DB saírem ANTES do crash
-  await flush(5000);
-
-  // 3. Responde (o cliente vê 200 antes do crash)
-  res.json({ ok: true, msg: 'crash em ~100ms (se o flush falhou)' });
-
-  // 4. Força o uncaughtException DEPOIS de responder
-  //    (process.nextTick garante que a response já foi enviada)
-  process.nextTick(() => {
-    throw new Error('TESTE FATAL — ignore');
-  });
+  // DEPOIS, em um setTimeout (fora do ciclo do Express),
+  // lança o erro. Isso dispara o uncaughtException global.
+  setTimeout(() => {
+    throw new Error('TESTE FATAL — ignore este email');
+  }, 100);
 });
 
 app.get('/health/warm', noCache, async (req, res) => {
