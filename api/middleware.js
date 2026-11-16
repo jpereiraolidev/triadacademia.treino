@@ -1,13 +1,11 @@
 // ============================================
 // api/middleware.js — Middlewares customizados
-// Triad Academia · v3.1
+// Triad Academia · v3.2
 //
-// Mudanças v3.1 (sobre v3.0):
-//   - requestId agora entra no AsyncLocalStorage (requestContext)
-//     para que log.* dentro de safeQuery/auth/routes peguem o reqId
-//     automaticamente e correlacionem email/DB/log.
-//   - errorLogger passa { err } (não só { msg }) para o redact
-//     do logs.js incluir stack/name/code estruturados no email.
+// Mudanças v3.2 (sobre v3.1):
+//   - errorLogger trata entity.parse.failed e entity.too.large
+//     como log.warn (sem email), não como "erro inesperado".
+//     JSON malformado de bot NÃO deve acordar o dev.
 // ============================================
 
 import { log as rootLog, newReqId, requestContext } from '../src/logs.js';
@@ -154,6 +152,25 @@ export function notFound(req, res) {
 // 8. errorLogger
 // ============================================
 export function errorLogger(err, req, res, next) {
+  // --- v3.2: JSON malformado e payload grande NÃO são "inesperados" ---
+  // São erros do cliente, não do servidor. Não devem disparar email.
+  if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && 'body' in err)) {
+    log.warn('JSON malformado no corpo da requisição', {
+      reqId: req.id,
+      method: req.method,
+      path: req.path,
+    });
+    return next(err);
+  }
+  if (err.type === 'entity.too.large') {
+    log.warn('payload muito grande', {
+      reqId: req.id,
+      method: req.method,
+      path: req.path,
+    });
+    return next(err);
+  }
+
   const meta = {
     reqId: req.id,
     method: req.method,
