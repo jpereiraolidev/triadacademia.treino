@@ -1,9 +1,16 @@
 // ============================================
 // api/middleware.js — Middlewares customizados
-// Triad Academia · v3.0
+// Triad Academia · v3.1
+//
+// Mudanças v3.1 (sobre v3.0):
+//   - requestId agora entra no AsyncLocalStorage (requestContext)
+//     para que log.* dentro de safeQuery/auth/routes peguem o reqId
+//     automaticamente e correlacionem email/DB/log.
+//   - errorLogger passa { err } (não só { msg }) para o redact
+//     do logs.js incluir stack/name/code estruturados no email.
 // ============================================
 
-import { log as rootLog, newReqId } from '../src/logs.js';
+import { log as rootLog, newReqId, requestContext } from '../src/logs.js';
 import { warmupDb } from '../src/prisma.js';
 import { HttpError, redactForLog, CRON_SECRET } from '../src/config.js';
 
@@ -18,7 +25,11 @@ export function requestId(req, res, next) {
     ? incoming
     : newReqId();
   res.setHeader('X-Request-Id', req.id);
-  next();
+
+  // Executa o resto da request dentro do contexto com reqId.
+  // Qualquer log.* (inclusive dentro de safeQuery) pega o reqId
+  // automaticamente e correlaciona email/DB/log.
+  requestContext.run({ reqId: req.id }, () => next());
 }
 
 // ============================================
@@ -156,9 +167,11 @@ export function errorLogger(err, req, res, next) {
   if (err instanceof HttpError) {
     log.info('erro esperado (HttpError)', meta);
   } else if (err?.code && String(err.code).startsWith('P')) {
-    log.error('erro Prisma', meta);
+    // Prisma conhecido: loga como error (dispara email+DB via logs.js)
+    log.error('erro Prisma', { ...meta, err });
   } else {
-    log.error('erro inesperado', meta);
+    // Inesperado: loga como error com o Error completo
+    log.error('erro inesperado', { ...meta, err });
     if (process.env.NODE_ENV === 'development' && err?.stack) {
       log.debug('stack', { reqId: req.id, stack: err.stack });
     }

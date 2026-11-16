@@ -1,22 +1,22 @@
 // ============================================
-// src/prisma.js — Conexão única + safeQuery + warmup
-// Triad Academia · v3.1
+// src/prisma.js — Conexão única + safeQuery + safeTx + warmup
+// Triad Academia · v3.2
 //
-// Mudanças v3.1 (sobre v3.0):
-//   - warmupDb agora é chamado automaticamente na 1ª query (800ms)
-//     em vez de esperar o timeout de 5s do pooler
-//   - SAFE_QUERY_RETRIES default caiu de 3 para 1
-//   - PRISMA_POOL_TIMEOUT default subiu de 20 para 30
-//   - PRISMA_CONNECT_TIMEOUT default subiu de 10 para 30
-//   - Detecção explícita de cold start + log
-//   - Log de duração total do safeQuery
-//
-// Impacto esperado:
-//   Antes: /auth/login = 14850ms em ciclos alternados (timeout × 3)
-//   Depois: /auth/login = ~1500-2000ms (warm-up + 1 query)
+// Mudanças v3.2 (sobre v3.1):
+//   - connection_limit default 1 → 3 (evita serialização total)
+//   - safeQueryRetries default 1 → 2 (retry real)
+//   - safeQueryBaseMs default 500 → 300 (backoff mais ágil)
+//   - RETRYABLE_CODES expandido (P1000, P1010, P1011, P2028)
+//   - NOVO safeTx(): retry + warm-up para $transaction
+//   - fastWarmup com fallback para warmupDb lento (1×)
+//   - Circuit breaker leve (isDbHealthy)
+//   - buildDatabaseUrl respeita params já presentes na URL
+//   - disconnect idempotente
+//   - prismaConfig expõe effectiveUrl mascarada
+//   - recordFailure chama log.alert (email + DB) quando abre circuit breaker
 //
 // Uso:
-//   import { safeQuery, warmupDb, disconnect, prisma } from './prisma.js';
+//   import { safeQuery, safeTx, warmupDb, disconnect, prisma, isDbHealthy, prismaConfig } from './prisma.js';
 // ============================================
 
 import { PrismaClient } from '@prisma/client';
@@ -29,18 +29,31 @@ log.info('carregando...');
 // 1. CONFIGURAÇÕES (via env, com defaults seguros)
 // ============================================
 const CONFIG = {
-  connectionLimit: process.env.PRISMA_CONNECTION_LIMIT || '1',
-  poolTimeout: process.env.PRISMA_POOL_TIMEOUT || '30',      // era 20
-  connectTimeout: process.env.PRISMA_CONNECT_TIMEOUT || '30', // era 10
-  safeQueryRetries: Number(process.env.SAFE_QUERY_RETRIES || 1), // era 3
-  safeQueryBaseMs: Number(process.env.SAFE_QUERY_BASE_MS || 500), // era 300
+  // 3 conexões absorvem concorrência sem estourar o pooler do Prisma Postgres.
+  // 1 conexão serializa TUDO — foi a causa raiz de requests "travando".
+  connectionLimit: process.env.PRISMA_CONNECTION_LIMIT || '3',
+  poolTimeout: process.env.PRISMA_POOL_TIMEOUT || '30',
+  connectTimeout: process.env.PRISMA_CONNECT_TIMEOUT || '30',
+  // 2 tentativas = 1 tentativa + 1 retry real. 1 = sem retry.
+  safeQueryRetries: Number(process.env.SAFE_QUERY_RETRIES || 2),
+  // Backoff base 300ms → 300ms, 600ms. Ágil o suficiente para blips.
+  safeQueryBaseMs: Number(process.env.SAFE_QUERY_BASE_MS || 300),
   warmupTimeoutMs: Number(process.env.SAFE_QUERY_WARMUP_MS || 800),
+  // Quantas falhas consecutivas antes de marcar DB como unhealthy
+  unhealthyAfter: Number(process.env.SAFE_QUERY_UNHEALTHY_AFTER || 3),
+  // Quanto tempo (ms) considerar unhealthy antes de tentar de novo
+  unhealthyCooldownMs: Number(process.env.SAFE_QUERY_UNHEALTHY_COOLDOWN_MS || 5000),
   logQueries: process.env.PRISMA_LOG === '1',
 };
 
 // ============================================
 // 2. AJUSTAR A URL DO BANCO
 // ============================================
+function maskUrl(rawUrl) {
+  if (!rawUrl) return '(vazia)';
+  return String(rawUrl).replace(/(:\/\/[^:]+:)[^@]+@/, '$1****@');
+}
+
 function buildDatabaseUrl(rawUrl) {
   if (!rawUrl) {
     log.warn('DATABASE_URL não definida — Prisma vai falhar em runtime.');
@@ -55,6 +68,7 @@ function buildDatabaseUrl(rawUrl) {
     return rawUrl;
   }
 
+  // Respeita o que já vier na URL (não sobrescreve)
   if (!url.searchParams.has('connection_limit')) {
     url.searchParams.set('connection_limit', CONFIG.connectionLimit);
   }
@@ -64,6 +78,7 @@ function buildDatabaseUrl(rawUrl) {
   if (!url.searchParams.has('connect_timeout')) {
     url.searchParams.set('connect_timeout', CONFIG.connectTimeout);
   }
+  // pgbouncer=true: habilita modo compatível com pooler externo.
   if (!url.searchParams.has('pgbouncer')) {
     url.searchParams.set('pgbouncer', 'true');
   }
@@ -137,26 +152,42 @@ function markQueryExecuted() {
 }
 
 // ============================================
-// 5. WARM-UP RÁPIDO (v3.1)
+// 5. CIRCUIT BREAKER LEVE
 // ============================================
-// Executa SELECT 1 com timeout curto (800ms).
-// Silencioso: se falhar, segue em frente sem bloquear.
-// Roda apenas UMA vez por instância da lambda.
-//
-// Por que 800ms:
-//   - O handshake real do pooler do Prisma Postgres leva ~5s.
-//   - 800ms é tempo suficiente para "acordar" a conexão TCP
-//     sem pagar os 5s completos do timeout do pooler.
-//   - Se falhar, a query real vai retentar (com backoff).
-//
-// Não gasta cota significativa: 1 SELECT 1 por instância.
+let consecutiveFailures = 0;
+let unhealthyUntil = 0;
+
+export function isDbHealthy() {
+  return Date.now() >= unhealthyUntil;
+}
+
+function recordSuccess() {
+  consecutiveFailures = 0;
+  unhealthyUntil = 0;
+}
+
+function recordFailure() {
+  consecutiveFailures++;
+  if (consecutiveFailures >= CONFIG.unhealthyAfter) {
+    unhealthyUntil = Date.now() + CONFIG.unhealthyCooldownMs;
+    // v3.2: log.alert dispara email + DB (via logs.js)
+    log.alert('circuit breaker aberto', {
+      consecutiveFailures,
+      cooldownMs: CONFIG.unhealthyCooldownMs,
+      unhealthyUntil: new Date(unhealthyUntil).toISOString(),
+    });
+  }
+}
+
+// ============================================
+// 6. WARM-UP RÁPIDO (v3.2)
 // ============================================
 async function fastWarmup() {
   if (warmupDone) return;
 
+  // Tentativa 1: rápida (800ms)
   const t0 = Date.now();
   let timer;
-
   try {
     await Promise.race([
       prisma.$queryRaw`SELECT 1`,
@@ -167,43 +198,59 @@ async function fastWarmup() {
         );
       }),
     ]);
-
     clearTimeout(timer);
     warmupDone = true;
     persistState();
-    const ms = Date.now() - t0;
-    log.debug('warmup rápido ok', { ms });
+    log.debug('warmup rápido ok', { ms: Date.now() - t0 });
+    return;
   } catch (err) {
     clearTimeout(timer);
-    // Silencioso: warmup rápido não é obrigatório
-    const ms = Date.now() - t0;
-    if (process.env.NODE_ENV === 'development') {
-      log.debug('warmup rápido falhou (segue sem ele)', { ms, msg: err.message });
-    }
+    log.debug('warmup rápido falhou, tentando lento (1×)', {
+      ms: Date.now() - t0,
+      msg: err.message,
+    });
+  }
+
+  // Tentativa 2: lenta (até 3.2s) — só uma vez por instância
+  const t1 = Date.now();
+  const slowTimeoutMs = Math.max(CONFIG.warmupTimeoutMs * 4, 3200);
+  try {
+    let timer2;
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) => {
+        timer2 = setTimeout(
+          () => reject(new Error(`warmup lento timeout após ${slowTimeoutMs}ms`)),
+          slowTimeoutMs
+        );
+      }),
+    ]);
+    clearTimeout(timer2);
+    warmupDone = true;
+    persistState();
+    log.info('warmup lento ok', { ms: Date.now() - t1 });
+  } catch (err) {
+    log.warn('warmup lento também falhou (segue para a query real)', {
+      ms: Date.now() - t1,
+      msg: err.message,
+    });
   }
 }
 
 // ============================================
-// 6. safeQuery (v3.1)
+// 7. safeQuery (v3.2)
 // ============================================
-// Mudanças sobre v3.0:
-//   - Warm-up rápido antes da 1ª query da instância
-//   - Retries default = 1 (era 3)
-//   - Base de backoff default = 500ms (era 300ms)
-//   - Log de duração total (warmup + query)
-//
-// Uso:
-//   const users = await safeQuery(
-//     () => prisma.user.findMany(),
-//     'users.list'
-//   );
-//
-// Config (env):
-//   SAFE_QUERY_RETRIES=1        (tentativas totais)
-//   SAFE_QUERY_BASE_MS=500      (base do backoff exponencial)
-//   SAFE_QUERY_WARMUP_MS=800    (timeout do warm-up rápido)
-// ============================================
-const RETRYABLE_CODES = new Set(['P1001', 'P1002', 'P1008', 'P1017', 'P2024']);
+const RETRYABLE_CODES = new Set([
+  'P1000', // auth failed
+  'P1001', // can't reach server
+  'P1002', // server reached, timeout
+  'P1008', // operation timeout
+  'P1010', // user access denied
+  'P1011', // TLS error
+  'P1017', // server closed connection
+  'P2024', // pool timeout
+  'P2028', // transaction API error / timeout
+]);
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -213,7 +260,6 @@ export async function safeQuery(fn, op = 'unknown') {
   const totalStart = Date.now();
   let lastErr;
 
-  // Warm-up rápido na primeira query da instância
   if (isFirstQuery) {
     await fastWarmup();
   }
@@ -224,18 +270,14 @@ export async function safeQuery(fn, op = 'unknown') {
     try {
       const result = await fn();
       markQueryExecuted();
+      recordSuccess();
 
       const attemptMs = Date.now() - attemptStart;
       const totalMs = Date.now() - totalStart;
 
       if (attempt > 1) {
-        log.info('safeQuery ok após retry', {
-          op,
-          attempt,
-          attemptMs,
-          totalMs,
-        });
-      } else {
+        log.info('safeQuery ok após retry', { op, attempt, attemptMs, totalMs });
+      } else if (process.env.NODE_ENV === 'development') {
         log.debug('safeQuery ok', { op, attemptMs, totalMs });
       }
       return result;
@@ -244,6 +286,10 @@ export async function safeQuery(fn, op = 'unknown') {
       const code = err?.code;
       const retryable = RETRYABLE_CODES.has(code);
       const attemptMs = Date.now() - attemptStart;
+
+      if (retryable) {
+        recordFailure();
+      }
 
       if (!retryable || attempt === CONFIG.safeQueryRetries) {
         log.error('safeQuery falhou', {
@@ -275,10 +321,23 @@ export async function safeQuery(fn, op = 'unknown') {
 }
 
 // ============================================
-// 7. warmupDb (para diagnóstico manual — /health/warm)
+// 8. safeTx (v3.2)
 // ============================================
-// Uso APENAS pelo /health/warm para diagnóstico.
-// O cron NÃO deve usar isso.
+export async function safeTx(fn, op = 'unknown', opts = {}) {
+  const txOpts = {
+    timeout: opts.timeout ?? 15000,
+    maxWait: opts.maxWait ?? 5000,
+    ...(opts.isolationLevel && { isolationLevel: opts.isolationLevel }),
+  };
+
+  return safeQuery(
+    () => prisma.$transaction(fn, txOpts),
+    op
+  );
+}
+
+// ============================================
+// 9. warmupDb (para diagnóstico manual — /health/warm)
 // ============================================
 export async function warmupDb(timeoutMs = 5000) {
   const t0 = Date.now();
@@ -299,20 +358,28 @@ export async function warmupDb(timeoutMs = 5000) {
     markQueryExecuted();
     warmupDone = true;
     persistState();
+    recordSuccess();
     log.debug('warmupDb ok', { ms });
     return { ok: true, ms, error: null };
   } catch (err) {
     clearTimeout(timer);
     const ms = Date.now() - t0;
+    recordFailure();
     log.warn(`warmupDb falhou (${ms}ms): ${err.message}`);
     return { ok: false, ms, error: err.message };
   }
 }
 
 // ============================================
-// 8. disconnect (graceful shutdown)
+// 10. disconnect (graceful shutdown, idempotente)
 // ============================================
+let disconnected = false;
 export async function disconnect() {
+  if (disconnected) {
+    log.debug('disconnect ignorado (já desconectado)');
+    return;
+  }
+  disconnected = true;
   try {
     await prisma.$disconnect();
     log.info('Prisma desconectado');
@@ -322,10 +389,12 @@ export async function disconnect() {
 }
 
 // ============================================
-// 9. EXPORTS
+// 11. EXPORTS
 // ============================================
 export { prisma };
+
 export const prismaBootedAt = bootedAt;
+
 export const prismaConfig = {
   connectionLimit: CONFIG.connectionLimit,
   poolTimeout: CONFIG.poolTimeout,
@@ -333,13 +402,21 @@ export const prismaConfig = {
   safeQueryRetries: CONFIG.safeQueryRetries,
   safeQueryBaseMs: CONFIG.safeQueryBaseMs,
   warmupTimeoutMs: CONFIG.warmupTimeoutMs,
+  unhealthyAfter: CONFIG.unhealthyAfter,
+  unhealthyCooldownMs: CONFIG.unhealthyCooldownMs,
+  effectiveUrl: maskUrl(finalUrl),
 };
 
 log.info('configurações aplicadas', {
+  connection_limit: CONFIG.connectionLimit,
   pool_timeout: CONFIG.poolTimeout,
   connect_timeout: CONFIG.connectTimeout,
   safe_query_retries: CONFIG.safeQueryRetries,
+  safe_query_base_ms: CONFIG.safeQueryBaseMs,
   warmup_ms: CONFIG.warmupTimeoutMs,
+  unhealthy_after: CONFIG.unhealthyAfter,
+  unhealthy_cooldown_ms: CONFIG.unhealthyCooldownMs,
+  url: maskUrl(finalUrl),
 });
 
 log.info('carregado com sucesso');

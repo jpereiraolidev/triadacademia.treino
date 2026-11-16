@@ -1,6 +1,11 @@
 // ============================================
 // src/config.js — Configuração compartilhada
-// Triad Academia · v3.0
+// Triad Academia · v3.2
+//
+// Mudanças v3.2 (sobre v3.1):
+//   - studentCreateSchema aceita cpf (nullable)
+//   - studentImportSchema aceita cpf (nullable)
+//   - redactForLog ampliado com cpf/cnpj/card/cvv/device_key
 // ============================================
 
 import 'dotenv/config';
@@ -165,9 +170,12 @@ export function verifyInviteHmac({ id, exp, nonce, hmac }) {
 // ============================================
 // 6. REDACT FOR LOG
 // ============================================
+// v3.2: ampliado com cpf/cnpj/card/cvv/device_key (LGPD)
 const SENSITIVE_KEYS = [
   'password', 'senha', 'token', 'authorization', 'apikey', 'api_key',
   'secret', 'cookie', 'hmac', 'nonce', 'jwt', 'bearer',
+  'cpf', 'cnpj', 'card', 'cvv', 'device_key', 'x-device-key',
+  'credential', 'resend_api', 'resend_key',
 ];
 
 function shouldRedact(key) {
@@ -192,6 +200,10 @@ export function redactForLog(value, depth = 0) {
 const cuid = z.string().min(1);
 const emailSchema = z.string().trim().toLowerCase().email('Email inválido').max(160);
 const phoneSchema = z.string().trim().regex(/^[+\d\s()-]{8,20}$/, 'Telefone inválido').max(20);
+// CPF: aceita com ou sem pontuação; a normalização (só dígitos)
+// acontece no routes.js (helper normalizeCpf). Aqui só validamos
+// que é string <= 20 chars.
+const cpfSchema = z.string().trim().max(20).nullish();
 
 export const loginSchema = z.object({
   email: emailSchema,
@@ -229,6 +241,7 @@ export const studentCreateSchema = z.object({
   name: z.string().trim().min(1, 'Nome obrigatório').max(120),
   email: emailSchema.nullish(),
   phone: phoneSchema.nullish(),
+  cpf: cpfSchema,                       // ← v3.2
   birthDate: z.coerce.date().nullish(),
   active: z.boolean().optional(),
 }).strict();
@@ -375,6 +388,7 @@ export const studentImportSchema = z.object({
       name: z.string().trim().min(1).max(120),
       email: emailSchema.optional().nullable(),
       phone: phoneSchema.optional().nullable(),
+      cpf: cpfSchema,                   // ← v3.2
       birthDate: z.coerce.date().optional().nullable(),
     }).strict()
   ).min(1).max(1000),

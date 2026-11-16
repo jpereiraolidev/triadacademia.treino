@@ -127,45 +127,40 @@ model User {
 // ou com User (aluno que aceitou convite e criou conta).
 // ============================================
 model Student {
-  id        String    @id @default(cuid())
-  name      String    @db.VarChar(120)
-  email     String?   @unique @db.VarChar(160)
-  phone     String?   @db.VarChar(20)
-  birthDate DateTime?
+  id         String    @id @default(cuid())
+  name       String    @db.VarChar(120)
+  email      String?   @unique @db.VarChar(160)
+  phone      String?   @db.VarChar(20)
+  birthDate  DateTime?
+
+  // NOVO v3.2 — CPF do aluno (usado pela catraca/gateway)
+  // Nullable porque alunos legados podem não ter CPF no sistema antigo.
+  // Unique porque dois alunos não podem ter o mesmo CPF.
+  cpf String? @unique @db.VarChar(14)
 
   // Rastreamento do sistema legado (migração)
   legacyId   String? @unique @db.VarChar(80)
   legacyData Json?
 
-  // FK para User (1:1 opcional — preenchida quando o aluno se recadastra)
-  // onDelete: SetNull — se o User for removido, o Student continua existindo
   userId String? @unique
-
   active Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relações de negócio
   workoutPlans WorkoutPlan[]
   memberships  Membership[]
   checkins     Checkin[]
-
-  // v3.1 — integracao.js
-  payments Payment[]
-
-  // Vínculo 1:1 com User
-  user User? @relation("UserStudent", fields: [userId], references: [id], onDelete: SetNull)
-
-  // Convites apontando para este aluno
-  invites Invite[]
+  payments     Payment[]
+  user         User? @relation("UserStudent", fields: [userId], references: [id], onDelete: SetNull)
+  invites      Invite[]
 
   @@index([name])
   @@index([active])
   @@index([legacyId])
   @@index([userId])
+  @@index([cpf])          // ← ADICIONE
 }
-
 // ============================================
 // PLAN
 // ============================================
@@ -580,4 +575,22 @@ model Settings {
   updatedAt DateTime @updatedAt
 
   @@map("settings")
+}
+
+// ============================================
+// SystemLog — log persistido de eventos críticos
+// ============================================
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     String   // "ERROR" | "FATAL"
+  tag       String?  // "[prisma.js] "
+  message   String
+  reqId     String?
+  meta      Json?
+  env       String?  // "production" | "development"
+  createdAt DateTime @default(now())
+
+  @@index([level, createdAt])
+  @@index([createdAt])
+  @@index([reqId])
 }

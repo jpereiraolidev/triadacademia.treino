@@ -1,20 +1,18 @@
 // ============================================
 // src/routes.js — Todas as rotas /api/v1
-// Triad Academia · v3.0
+// Triad Academia · v3.2
 //
-// Inclui:
-//   - CRUD de users, students, plans, memberships, devices
-//   - Checkins (device + manual + listagem)
-//   - Exercises, Workouts, Evolution
-//   - Invites (com revalidação de HMAC)
-//   - Student import
-//   - GET /_ping  (ultraleve, usado pelo cron)
-//   - POST /cron/ping (dispara 5 self-pings a cada 20s)
+// Mudanças v3.2 (sobre v3.1):
+//   - POST /students aceita cpf (normalizado para só dígitos)
+//   - evaluateCheckin normaliza CPF (com/sem pontuação) e busca em
+//     id, cpf, legacyId — funciona com qualquer formato do gateway
+//   - /invites/bulk sem skipDuplicates (createMany puro, mais rápido)
+//   - POST /students/import aceita cpf
 // ============================================
 
 import express from 'express';
 import { log as rootLog } from './logs.js';
-import { safeQuery } from './prisma.js';
+import { safeQuery, safeTx } from './prisma.js';
 import {
   prisma, asyncHandler, validate, HttpError,
   hashPassword, verifyPassword, signToken,
@@ -46,6 +44,17 @@ log.info('carregando...');
 const router = express.Router();
 let routeCount = 0;
 const countRoute = () => routeCount++;
+
+// ============================================
+// HELPER — normaliza CPF (remove pontuação)
+// ============================================
+// Retorna só dígitos se for 11 dígitos; senão retorna null.
+// Usado pelo POST /students, import e evaluateCheckin.
+function normalizeCpf(value) {
+  if (value == null) return null;
+  const digits = String(value).replace(/\D/g, '');
+  return digits.length === 11 ? digits : null;
+}
 
 // ============================================
 // AUTH
@@ -107,13 +116,19 @@ router.post(
   validate(userCreateSchema),
   asyncHandler(async (req, res) => {
     const { name, email, password, role } = req.validated;
-    const exists = await prisma.user.findUnique({ where: { email } });
+    const exists = await safeQuery(
+      () => prisma.user.findUnique({ where: { email } }),
+      'users.create.checkEmail'
+    );
     if (exists) throw new HttpError(409, 'Email já cadastrado');
     const hash = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: { name, email, password: hash, role: role ?? 'PROFESSOR' },
-      select: userSelect,
-    });
+    const user = await safeQuery(
+      () => prisma.user.create({
+        data: { name, email, password: hash, role: role ?? 'PROFESSOR' },
+        select: userSelect,
+      }),
+      'users.create'
+    );
     res.status(201).json(user);
   })
 );
@@ -125,11 +140,17 @@ router.patch(
   validate(userUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.user.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.user.findUnique({ where: { id } }),
+      'users.update.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Usuário não encontrado');
-    const user = await prisma.user.update({
-      where: { id }, data: req.validated, select: userSelect,
-    });
+    const user = await safeQuery(
+      () => prisma.user.update({
+        where: { id }, data: req.validated, select: userSelect,
+      }),
+      'users.update'
+    );
     res.json(user);
   })
 );
@@ -141,10 +162,16 @@ router.patch(
   validate(userPasswordSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.user.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.user.findUnique({ where: { id } }),
+      'users.password.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Usuário não encontrado');
     const hash = await hashPassword(req.validated.password);
-    await prisma.user.update({ where: { id }, data: { password: hash } });
+    await safeQuery(
+      () => prisma.user.update({ where: { id }, data: { password: hash } }),
+      'users.password'
+    );
     res.status(204).send();
   })
 );
@@ -156,9 +183,15 @@ router.delete(
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (id === req.user.id) throw new HttpError(400, 'Não pode desativar a si mesmo');
-    const existing = await prisma.user.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.user.findUnique({ where: { id } }),
+      'users.delete.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Usuário não encontrado');
-    await prisma.user.update({ where: { id }, data: { active: false } });
+    await safeQuery(
+      () => prisma.user.update({ where: { id }, data: { active: false } }),
+      'users.delete'
+    );
     res.status(204).send();
   })
 );
@@ -192,15 +225,18 @@ router.post(
   validate(exerciseCreateSchema),
   asyncHandler(async (req, res) => {
     const { name, description, muscleGroup, videoUrl, active } = req.validated;
-    const exercise = await prisma.exercise.create({
-      data: {
-        name,
-        description: description ?? null,
-        muscleGroup: muscleGroup ?? null,
-        videoUrl: videoUrl || null,
-        ...(active !== undefined && { active }),
-      },
-    });
+    const exercise = await safeQuery(
+      () => prisma.exercise.create({
+        data: {
+          name,
+          description: description ?? null,
+          muscleGroup: muscleGroup ?? null,
+          videoUrl: videoUrl || null,
+          ...(active !== undefined && { active }),
+        },
+      }),
+      'exercises.create'
+    );
     res.status(201).json(exercise);
   })
 );
@@ -212,11 +248,17 @@ router.patch(
   validate(exerciseUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.exercise.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.exercise.findUnique({ where: { id } }),
+      'exercises.update.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Exercício não encontrado');
     const data = { ...req.validated };
     if (data.videoUrl === '') data.videoUrl = null;
-    const exercise = await prisma.exercise.update({ where: { id }, data });
+    const exercise = await safeQuery(
+      () => prisma.exercise.update({ where: { id }, data }),
+      'exercises.update'
+    );
     res.json(exercise);
   })
 );
@@ -227,9 +269,15 @@ router.delete(
   requireAuth, requireRole('ADMIN', 'PROFESSOR'),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.exercise.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.exercise.findUnique({ where: { id } }),
+      'exercises.delete.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Exercício não encontrado');
-    await prisma.exercise.update({ where: { id }, data: { active: false } });
+    await safeQuery(
+      () => prisma.exercise.update({ where: { id }, data: { active: false } }),
+      'exercises.delete'
+    );
     res.status(204).send();
   })
 );
@@ -281,16 +329,22 @@ router.post(
   requireAuth, requireRole('ADMIN', 'RECEPCAO'),
   validate(studentCreateSchema),
   asyncHandler(async (req, res) => {
-    const { name, email, phone, birthDate, active } = req.validated;
-    const student = await prisma.student.create({
-      data: {
-        name,
-        email: email ?? null,
-        phone: phone ?? null,
-        birthDate: birthDate ?? null,
-        ...(active !== undefined && { active }),
-      },
-    });
+    const { name, email, phone, cpf, birthDate, active } = req.validated;
+    const cpfNorm = normalizeCpf(cpf);
+
+    const student = await safeQuery(
+      () => prisma.student.create({
+        data: {
+          name,
+          email: email ?? null,
+          phone: phone ?? null,
+          cpf: cpfNorm,
+          birthDate: birthDate ?? null,
+          ...(active !== undefined && { active }),
+        },
+      }),
+      'students.create'
+    );
     res.status(201).json(student);
   })
 );
@@ -302,9 +356,17 @@ router.patch(
   validate(studentUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.student.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.student.findUnique({ where: { id } }),
+      'students.update.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Aluno não encontrado');
-    const student = await prisma.student.update({ where: { id }, data: req.validated });
+    const data = { ...req.validated };
+    if ('cpf' in data) data.cpf = normalizeCpf(data.cpf);
+    const student = await safeQuery(
+      () => prisma.student.update({ where: { id }, data }),
+      'students.update'
+    );
     res.json(student);
   })
 );
@@ -315,9 +377,15 @@ router.delete(
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.student.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.student.findUnique({ where: { id } }),
+      'students.delete.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Aluno não encontrado');
-    await prisma.student.update({ where: { id }, data: { active: false } });
+    await safeQuery(
+      () => prisma.student.update({ where: { id }, data: { active: false } }),
+      'students.delete'
+    );
     res.status(204).send();
   })
 );
@@ -363,7 +431,10 @@ router.post(
   requireAuth, requireRole('ADMIN'),
   validate(planCreateSchema),
   asyncHandler(async (req, res) => {
-    const plan = await prisma.plan.create({ data: req.validated });
+    const plan = await safeQuery(
+      () => prisma.plan.create({ data: req.validated }),
+      'plans.create'
+    );
     res.status(201).json(plan);
   })
 );
@@ -375,9 +446,15 @@ router.patch(
   validate(planUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.plan.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.plan.findUnique({ where: { id } }),
+      'plans.update.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Plano não encontrado');
-    const plan = await prisma.plan.update({ where: { id }, data: req.validated });
+    const plan = await safeQuery(
+      () => prisma.plan.update({ where: { id }, data: req.validated }),
+      'plans.update'
+    );
     res.json(plan);
   })
 );
@@ -388,9 +465,15 @@ router.delete(
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.plan.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.plan.findUnique({ where: { id } }),
+      'plans.delete.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Plano não encontrado');
-    await prisma.plan.update({ where: { id }, data: { active: false } });
+    await safeQuery(
+      () => prisma.plan.update({ where: { id }, data: { active: false } }),
+      'plans.delete'
+    );
     res.status(204).send();
   })
 );
@@ -451,8 +534,14 @@ router.post(
     const { studentId, planId, startDate, endDate, priceAtPurchase, status } = req.validated;
 
     const [student, plan] = await Promise.all([
-      prisma.student.findUnique({ where: { id: studentId } }),
-      prisma.plan.findUnique({ where: { id: planId } }),
+      safeQuery(
+        () => prisma.student.findUnique({ where: { id: studentId } }),
+        'memberships.create.findStudent'
+      ),
+      safeQuery(
+        () => prisma.plan.findUnique({ where: { id: planId } }),
+        'memberships.create.findPlan'
+      ),
     ]);
     if (!student) throw new HttpError(404, 'Aluno não encontrado');
     if (!student.active) throw new HttpError(400, 'Aluno inativo');
@@ -466,15 +555,18 @@ router.post(
     }
     if (finalEnd <= startDate) throw new HttpError(400, 'endDate deve ser depois de startDate');
 
-    const membership = await prisma.membership.create({
-      data: {
-        studentId, planId, startDate,
-        endDate: finalEnd,
-        priceAtPurchase: priceAtPurchase ?? plan.price,
-        status: status ?? 'ATIVA',
-      },
-      include: { student: true, plan: true },
-    });
+    const membership = await safeQuery(
+      () => prisma.membership.create({
+        data: {
+          studentId, planId, startDate,
+          endDate: finalEnd,
+          priceAtPurchase: priceAtPurchase ?? plan.price,
+          status: status ?? 'ATIVA',
+        },
+        include: { student: true, plan: true },
+      }),
+      'memberships.create'
+    );
     res.status(201).json(membership);
   })
 );
@@ -486,12 +578,18 @@ router.patch(
   validate(membershipUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.membership.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.membership.findUnique({ where: { id } }),
+      'memberships.update.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Matrícula não encontrada');
-    const membership = await prisma.membership.update({
-      where: { id }, data: req.validated,
-      include: { student: true, plan: true },
-    });
+    const membership = await safeQuery(
+      () => prisma.membership.update({
+        where: { id }, data: req.validated,
+        include: { student: true, plan: true },
+      }),
+      'memberships.update'
+    );
     res.json(membership);
   })
 );
@@ -502,9 +600,15 @@ router.delete(
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.membership.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.membership.findUnique({ where: { id } }),
+      'memberships.delete.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Matrícula não encontrada');
-    await prisma.membership.update({ where: { id }, data: { status: 'CANCELADA' } });
+    await safeQuery(
+      () => prisma.membership.update({ where: { id }, data: { status: 'CANCELADA' } }),
+      'memberships.delete'
+    );
     res.status(204).send();
   })
 );
@@ -539,15 +643,21 @@ router.post(
   validate(deviceCreateSchema),
   asyncHandler(async (req, res) => {
     const { name, identifier, active } = req.validated;
-    const exists = await prisma.device.findUnique({ where: { identifier } });
+    const exists = await safeQuery(
+      () => prisma.device.findUnique({ where: { identifier } }),
+      'devices.create.checkIdentifier'
+    );
     if (exists) throw new HttpError(409, 'Identificador já cadastrado');
 
     const rawKey = generateDeviceKey();
     const apiKeyHash = hashDeviceKey(rawKey);
-    const device = await prisma.device.create({
-      data: { name, identifier, apiKeyHash, ...(active !== undefined && { active }) },
-      select: { id: true, name: true, identifier: true, active: true, createdAt: true },
-    });
+    const device = await safeQuery(
+      () => prisma.device.create({
+        data: { name, identifier, apiKeyHash, ...(active !== undefined && { active }) },
+        select: { id: true, name: true, identifier: true, active: true, createdAt: true },
+      }),
+      'devices.create'
+    );
     res.status(201).json({
       ...device,
       apiKey: rawKey,
@@ -563,15 +673,21 @@ router.patch(
   validate(deviceUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.device.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.device.findUnique({ where: { id } }),
+      'devices.update.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Device não encontrado');
-    const device = await prisma.device.update({
-      where: { id }, data: req.validated,
-      select: {
-        id: true, name: true, identifier: true, active: true,
-        createdAt: true, updatedAt: true,
-      },
-    });
+    const device = await safeQuery(
+      () => prisma.device.update({
+        where: { id }, data: req.validated,
+        select: {
+          id: true, name: true, identifier: true, active: true,
+          createdAt: true, updatedAt: true,
+        },
+      }),
+      'devices.update'
+    );
     res.json(device);
   })
 );
@@ -582,11 +698,17 @@ router.post(
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.device.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.device.findUnique({ where: { id } }),
+      'devices.rotateKey.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Device não encontrado');
     const rawKey = generateDeviceKey();
     const apiKeyHash = hashDeviceKey(rawKey);
-    await prisma.device.update({ where: { id }, data: { apiKeyHash } });
+    await safeQuery(
+      () => prisma.device.update({ where: { id }, data: { apiKeyHash } }),
+      'devices.rotateKey'
+    );
     res.json({
       id, apiKey: rawKey,
       warning: 'Guarde esta API key. Ela não será exibida novamente.',
@@ -600,9 +722,15 @@ router.delete(
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.device.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.device.findUnique({ where: { id } }),
+      'devices.delete.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Device não encontrado');
-    await prisma.device.update({ where: { id }, data: { active: false } });
+    await safeQuery(
+      () => prisma.device.update({ where: { id }, data: { active: false } }),
+      'devices.delete'
+    );
     res.status(204).send();
   })
 );
@@ -611,43 +739,56 @@ countRoute();
 // ============================================
 // CHECKINS
 // ============================================
-// Substitua a função evaluateCheckin antiga por esta:
+// v3.2: normaliza CPF (com/sem pontuação) e busca em id, cpf, legacyId.
+// Usa 1 query (findFirst com OR + include memberships).
+// ============================================
 async function evaluateCheckin(studentId) {
-  // 1. Tenta achar o aluno pelo ID do Prisma (formato normal)
-  let student = await prisma.student.findUnique({ where: { id: studentId } });
-  
-  // 2. Se não achou, tenta achar pelo CPF (porque o Gateway envia o CPF)
-  if (!student) {
-    student = await prisma.student.findFirst({ 
-      where: { 
-        OR: [
-          { cpf: studentId },
-          { legacyId: studentId } // Caso você use o CPF no legacyId
-        ]
-      } 
-    });
+  const now = new Date();
+  const digits = normalizeCpf(studentId); // só dígitos ou null
+
+  // Monta o OR dinamicamente:
+  //   - id: studentId (como veio)
+  //   - cpf: studentId (se já for 11 dígitos) + digits (se for CPF pontuado)
+  //   - legacyId: studentId + digits (gateway pode mandar com/sem pontuação)
+  const or = [{ id: studentId }];
+  if (typeof studentId === 'string') {
+    or.push({ cpf: studentId });
+    if (digits && digits !== studentId) or.push({ cpf: digits });
+    or.push({ legacyId: studentId });
+    if (digits && digits !== studentId) or.push({ legacyId: digits });
   }
 
-  // 3. Se não encontrou ninguém, retorna erro limpo (sem quebrar o Prisma)
-  if (!student) {
-    return { authorized: false, reason: 'Aluno não encontrado no banco da Nuvem.', membership: null, student: null };
-  }
+  const student = await safeQuery(
+    () => prisma.student.findFirst({
+      where: { OR: or },
+      include: {
+        memberships: {
+          where: {
+            status: 'ATIVA',
+            startDate: { lte: now },
+            endDate: { gte: now },
+          },
+          orderBy: { endDate: 'desc' },
+          take: 1,
+        },
+      },
+    }),
+    'checkins.evaluateCheckin'
+  );
 
+  if (!student) {
+    return {
+      authorized: false,
+      reason: 'Aluno não encontrado no banco da Nuvem.',
+      membership: null,
+      student: null,
+    };
+  }
   if (!student.active) {
     return { authorized: false, reason: 'Aluno inativo', membership: null, student };
   }
 
-  const now = new Date();
-  const membership = await prisma.membership.findFirst({
-    where: {
-      studentId: student.id, // Usa o ID REAL que o Prisma achou
-      status: 'ATIVA',
-      startDate: { lte: now },
-      endDate: { gte: now },
-    },
-    orderBy: { endDate: 'desc' },
-  });
-
+  const membership = student.memberships[0] ?? null;
   if (!membership) {
     return { authorized: false, reason: 'Sem matrícula ativa', membership: null, student };
   }
@@ -655,7 +796,6 @@ async function evaluateCheckin(studentId) {
   return { authorized: true, reason: null, membership, student };
 }
 
-// Substitua a rota POST /checkins/device antiga por esta:
 router.post(
   '/checkins/device',
   deviceLimiter,
@@ -665,27 +805,33 @@ router.post(
     const { studentId, type, reason } = req.validated;
     const { authorized, reason: denyReason, membership, student } = await evaluateCheckin(studentId);
 
-    // Se o aluno não foi encontrado pelo CPF ou ID, nem cria o checkin no banco
     if (!student) {
       return res.status(404).json({ error: denyReason || 'Aluno não encontrado na nuvem.' });
     }
 
-    const checkin = await prisma.checkin.create({
-      data: {
-        studentId: student.id, // Usa o ID real
-        type,
-        status: authorized ? 'AUTORIZADO' : 'NEGADO',
-        reason: reason ?? denyReason ?? null,
-        deviceId: req.device.id,
-        membershipId: membership?.id ?? null,
-      },
-      include: {
-        student: { select: { id: true, name: true } },
-        device: { select: { id: true, name: true } },
-      },
+    const checkin = await safeQuery(
+      () => prisma.checkin.create({
+        data: {
+          studentId: student.id,
+          type,
+          status: authorized ? 'AUTORIZADO' : 'NEGADO',
+          reason: reason ?? denyReason ?? null,
+          deviceId: req.device.id,
+          membershipId: membership?.id ?? null,
+        },
+        include: {
+          student: { select: { id: true, name: true } },
+          device: { select: { id: true, name: true } },
+        },
+      }),
+      'checkins.device.create'
+    );
+
+    res.status(200).json({
+      authorized,
+      reason: denyReason ?? null,
+      checkin,
     });
-    
-    res.status(authorized ? 201 : 403).json(checkin);
   })
 );
 countRoute();
@@ -698,18 +844,21 @@ router.post(
     const { studentId, type, status, reason } = req.validated;
     const { membership } = await evaluateCheckin(studentId).catch(() => ({ membership: null }));
 
-    const checkin = await prisma.checkin.create({
-      data: {
-        studentId, type, status,
-        reason: reason ?? null,
-        membershipId: membership?.id ?? null,
-        registeredBy: req.user.id,
-      },
-      include: {
-        student: { select: { id: true, name: true } },
-        registeredUser: { select: { id: true, name: true } },
-      },
-    });
+    const checkin = await safeQuery(
+      () => prisma.checkin.create({
+        data: {
+          studentId, type, status,
+          reason: reason ?? null,
+          membershipId: membership?.id ?? null,
+          registeredBy: req.user.id,
+        },
+        include: {
+          student: { select: { id: true, name: true } },
+          registeredUser: { select: { id: true, name: true } },
+        },
+      }),
+      'checkins.manual.create'
+    );
     res.status(201).json(checkin);
   })
 );
@@ -821,47 +970,56 @@ router.post(
     const { studentId } = req.params;
     const { name, description, startDate, endDate, exercises } = req.validated;
 
-    const student = await prisma.student.findUnique({ where: { id: studentId } });
+    const student = await safeQuery(
+      () => prisma.student.findUnique({ where: { id: studentId } }),
+      'workouts.create.findStudent'
+    );
     if (!student) throw new HttpError(404, 'Aluno não encontrado');
     if (!student.active) throw new HttpError(400, 'Aluno inativo');
 
     if (exercises && exercises.length > 0) {
       const ids = [...new Set(exercises.map((e) => e.exerciseId))];
-      const found = await prisma.exercise.findMany({
-        where: { id: { in: ids } },
-        select: { id: true },
-      });
+      const found = await safeQuery(
+        () => prisma.exercise.findMany({
+          where: { id: { in: ids } },
+          select: { id: true },
+        }),
+        'workouts.create.findExercises'
+      );
       const foundSet = new Set(found.map((f) => f.id));
       const missing = ids.filter((id) => !foundSet.has(id));
       if (missing.length) throw new HttpError(400, `Exercícios inexistentes: ${missing.join(', ')}`);
     }
 
-    const workout = await prisma.workoutPlan.create({
-      data: {
-        studentId, createdBy: req.user.id, name,
-        description: description ?? null,
-        startDate,
-        endDate: endDate ?? null,
-        exercises:
-          exercises && exercises.length > 0
-            ? {
-                create: exercises.map((ex, index) => ({
-                  exerciseId: ex.exerciseId,
-                  order: ex.order ?? index,
-                  sets: ex.sets ?? null,
-                  repetitions: ex.repetitions ?? null,
-                  weight: ex.weight ?? null,
-                  restSeconds: ex.restSeconds ?? null,
-                  notes: ex.notes ?? null,
-                })),
-              }
-            : undefined,
-      },
-      include: {
-        exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
-        creator: { select: { id: true, name: true } },
-      },
-    });
+    const workout = await safeQuery(
+      () => prisma.workoutPlan.create({
+        data: {
+          studentId, createdBy: req.user.id, name,
+          description: description ?? null,
+          startDate,
+          endDate: endDate ?? null,
+          exercises:
+            exercises && exercises.length > 0
+              ? {
+                  create: exercises.map((ex, index) => ({
+                    exerciseId: ex.exerciseId,
+                    order: ex.order ?? index,
+                    sets: ex.sets ?? null,
+                    repetitions: ex.repetitions ?? null,
+                    weight: ex.weight ?? null,
+                    restSeconds: ex.restSeconds ?? null,
+                    notes: ex.notes ?? null,
+                  })),
+                }
+              : undefined,
+        },
+        include: {
+          exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
+          creator: { select: { id: true, name: true } },
+        },
+      }),
+      'workouts.create'
+    );
     res.status(201).json(workout);
   })
 );
@@ -894,12 +1052,18 @@ router.patch(
   validate(workoutUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.workoutPlan.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.workoutPlan.findUnique({ where: { id } }),
+      'workouts.update.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Treino não encontrado');
-    const workout = await prisma.workoutPlan.update({
-      where: { id }, data: req.validated,
-      include: { exercises: { include: { exercise: true }, orderBy: { order: 'asc' } } },
-    });
+    const workout = await safeQuery(
+      () => prisma.workoutPlan.update({
+        where: { id }, data: req.validated,
+        include: { exercises: { include: { exercise: true }, orderBy: { order: 'asc' } } },
+      }),
+      'workouts.update'
+    );
     res.json(workout);
   })
 );
@@ -910,9 +1074,15 @@ router.delete(
   requireAuth, requireRole('ADMIN', 'PROFESSOR'),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const existing = await prisma.workoutPlan.findUnique({ where: { id } });
+    const existing = await safeQuery(
+      () => prisma.workoutPlan.findUnique({ where: { id } }),
+      'workouts.delete.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Treino não encontrado');
-    await prisma.workoutPlan.update({ where: { id }, data: { status: 'ARQUIVADO' } });
+    await safeQuery(
+      () => prisma.workoutPlan.update({ where: { id }, data: { status: 'ARQUIVADO' } }),
+      'workouts.delete'
+    );
     res.status(204).send();
   })
 );
@@ -927,30 +1097,42 @@ router.post(
     const { exerciseId, order, sets, repetitions, weight, restSeconds, notes } = req.validated;
 
     const [workout, exercise] = await Promise.all([
-      prisma.workoutPlan.findUnique({ where: { id: workoutId } }),
-      prisma.exercise.findUnique({ where: { id: exerciseId } }),
+      safeQuery(
+        () => prisma.workoutPlan.findUnique({ where: { id: workoutId } }),
+        'workouts.exercise.create.findWorkout'
+      ),
+      safeQuery(
+        () => prisma.exercise.findUnique({ where: { id: exerciseId } }),
+        'workouts.exercise.create.findExercise'
+      ),
     ]);
     if (!workout) throw new HttpError(404, 'Treino não encontrado');
     if (!exercise) throw new HttpError(404, 'Exercício não encontrado');
 
     let finalOrder = order;
     if (finalOrder === undefined || finalOrder === null) {
-      const last = await prisma.workoutExercise.findFirst({
-        where: { workoutId },
-        orderBy: { order: 'desc' },
-      });
+      const last = await safeQuery(
+        () => prisma.workoutExercise.findFirst({
+          where: { workoutId },
+          orderBy: { order: 'desc' },
+        }),
+        'workouts.exercise.create.findLastOrder'
+      );
       finalOrder = last ? last.order + 1 : 0;
     }
 
-    const created = await prisma.workoutExercise.create({
-      data: {
-        workoutId, exerciseId, order: finalOrder,
-        sets: sets ?? null, repetitions: repetitions ?? null,
-        weight: weight ?? null, restSeconds: restSeconds ?? null,
-        notes: notes ?? null,
-      },
-      include: { exercise: true },
-    });
+    const created = await safeQuery(
+      () => prisma.workoutExercise.create({
+        data: {
+          workoutId, exerciseId, order: finalOrder,
+          sets: sets ?? null, repetitions: repetitions ?? null,
+          weight: weight ?? null, restSeconds: restSeconds ?? null,
+          notes: notes ?? null,
+        },
+        include: { exercise: true },
+      }),
+      'workouts.exercise.create'
+    );
     res.status(201).json(created);
   })
 );
@@ -962,14 +1144,20 @@ router.patch(
   validate(workoutExerciseUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id: workoutId, exerciseId } = req.params;
-    const existing = await prisma.workoutExercise.findFirst({
-      where: { id: exerciseId, workoutId },
-    });
+    const existing = await safeQuery(
+      () => prisma.workoutExercise.findFirst({
+        where: { id: exerciseId, workoutId },
+      }),
+      'workouts.exercise.update.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Exercício do treino não encontrado');
-    const updated = await prisma.workoutExercise.update({
-      where: { id: exerciseId }, data: req.validated,
-      include: { exercise: true },
-    });
+    const updated = await safeQuery(
+      () => prisma.workoutExercise.update({
+        where: { id: exerciseId }, data: req.validated,
+        include: { exercise: true },
+      }),
+      'workouts.exercise.update'
+    );
     res.json(updated);
   })
 );
@@ -980,11 +1168,17 @@ router.delete(
   requireAuth, requireRole('ADMIN', 'PROFESSOR'),
   asyncHandler(async (req, res) => {
     const { id: workoutId, exerciseId } = req.params;
-    const existing = await prisma.workoutExercise.findFirst({
-      where: { id: exerciseId, workoutId },
-    });
+    const existing = await safeQuery(
+      () => prisma.workoutExercise.findFirst({
+        where: { id: exerciseId, workoutId },
+      }),
+      'workouts.exercise.delete.checkExists'
+    );
     if (!existing) throw new HttpError(404, 'Exercício do treino não encontrado');
-    await prisma.workoutExercise.delete({ where: { id: exerciseId } });
+    await safeQuery(
+      () => prisma.workoutExercise.delete({ where: { id: exerciseId } }),
+      'workouts.exercise.delete'
+    );
     res.status(204).send();
   })
 );
@@ -1052,7 +1246,7 @@ router.get(
 countRoute();
 
 // ============================================
-// INVITES (v3.0 — com nonce persistido + revalidação HMAC)
+// INVITES
 // ============================================
 
 async function createInvite({ studentId, email, phone, name, type, role, expiresInDays, createdById }) {
@@ -1064,22 +1258,25 @@ async function createInvite({ studentId, email, phone, name, type, role, expires
   const hmac = signInvite({ id, exp, nonce });
   const token = `${id}.${hmac}`;
 
-  const invite = await prisma.invite.create({
-    data: {
-      id, token, hmac, nonce,
-      createdById,
-      studentId: studentId ?? null,
-      email: email ?? null,
-      phone: phone ?? null,
-      name: name ?? null,
-      type,
-      role: role ?? null,
-      expiresAt,
-    },
-    include: {
-      student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
-    },
-  });
+  const invite = await safeQuery(
+    () => prisma.invite.create({
+      data: {
+        id, token, hmac, nonce,
+        createdById,
+        studentId: studentId ?? null,
+        email: email ?? null,
+        phone: phone ?? null,
+        name: name ?? null,
+        type,
+        role: role ?? null,
+        expiresAt,
+      },
+      include: {
+        student: { select: { id: true, name: true, email: true, phone: true, legacyId: true } },
+      },
+    }),
+    'invites.create'
+  );
 
   return { invite, token, url: buildInviteUrl(token), expiresAt };
 }
@@ -1092,7 +1289,10 @@ router.post(
     const { studentId, email, phone, name, type, role, expiresInDays } = req.validated;
 
     if (studentId) {
-      const student = await prisma.student.findUnique({ where: { id: studentId } });
+      const student = await safeQuery(
+        () => prisma.student.findUnique({ where: { id: studentId } }),
+        'invites.create.findStudent'
+      );
       if (!student) throw new HttpError(404, 'Aluno não encontrado');
       if (student.userId) throw new HttpError(409, 'Aluno já possui conta ativa');
     }
@@ -1117,25 +1317,44 @@ router.post(
   asyncHandler(async (req, res) => {
     const { invites, expiresInDays } = req.validated;
 
-    const results = [];
-    for (const item of invites) {
+    const drafts = invites.map((item) => {
       if (item.type === 'STAFF' && !item.role) {
         throw new HttpError(400, 'role é obrigatório para convites de STAFF');
       }
-      const r = await createInvite({
-        studentId: item.studentId,
-        email: item.email,
-        phone: item.phone,
-        name: item.name,
-        type: item.type,
-        role: item.role,
-        expiresInDays,
+      const id = generateInviteId();
+      const nonce = generateInviteNonce();
+      const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+      const exp = Math.floor(expiresAt.getTime() / 1000);
+      const hmac = signInvite({ id, exp, nonce });
+      return {
+        id,
+        token: `${id}.${hmac}`,
+        hmac,
+        nonce,
         createdById: req.user.id,
-      });
-      results.push({ invite: r.invite, token: r.token, url: r.url });
-    }
+        studentId: item.studentId ?? null,
+        email: item.email ?? null,
+        phone: item.phone ?? null,
+        name: item.name ?? null,
+        type: item.type,
+        role: item.role ?? null,
+        expiresAt,
+      };
+    });
 
-    res.status(201).json({ created: results.length, invites: results });
+    // v3.2: sem skipDuplicates (tokens são gerados com crypto — colisão ~0)
+    await safeQuery(
+      () => prisma.invite.createMany({ data: drafts }),
+      'invites.bulk.createMany'
+    );
+
+    res.status(201).json({
+      created: drafts.length,
+      invites: drafts.map((d) => ({
+        token: d.token,
+        url: buildInviteUrl(d.token),
+      })),
+    });
   })
 );
 countRoute();
@@ -1196,7 +1415,6 @@ router.get(
 
     if (!invite) throw new HttpError(404, 'Convite inválido');
 
-    // v3.0: revalida HMAC usando nonce persistido
     const exp = Math.floor(invite.expiresAt.getTime() / 1000);
     const hmacOk = verifyInviteHmac({
       id: invite.id,
@@ -1212,10 +1430,13 @@ router.get(
     if (invite.status === 'REVOKED') throw new HttpError(400, 'Convite cancelado');
     if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já utilizado');
     if (invite.expiresAt < new Date()) {
-      await prisma.invite.update({
-        where: { id: invite.id },
-        data: { status: 'EXPIRED' },
-      }).catch(() => {});
+      await safeQuery(
+        () => prisma.invite.update({
+          where: { id: invite.id },
+          data: { status: 'EXPIRED' },
+        }),
+        'invites.markExpired'
+      ).catch(() => {});
       throw new HttpError(400, 'Convite expirado');
     }
 
@@ -1244,14 +1465,16 @@ router.post(
     const { token } = req.params;
     const { password, email: emailInput } = req.validated;
 
-    const invite = await prisma.invite.findUnique({
-      where: { token },
-      include: { student: true },
-    });
+    const invite = await safeQuery(
+      () => prisma.invite.findUnique({
+        where: { token },
+        include: { student: true },
+      }),
+      'invites.accept.findInvite'
+    );
 
     if (!invite) throw new HttpError(404, 'Convite inválido');
 
-    // v3.0: revalida HMAC
     const exp = Math.floor(invite.expiresAt.getTime() / 1000);
     const hmacOk = verifyInviteHmac({
       id: invite.id,
@@ -1268,12 +1491,15 @@ router.post(
     const email = invite.student?.email || invite.email || emailInput;
     if (!email) throw new HttpError(400, 'Email é obrigatório para criar a conta');
 
-    const exists = await prisma.user.findUnique({ where: { email } });
+    const exists = await safeQuery(
+      () => prisma.user.findUnique({ where: { email } }),
+      'invites.accept.checkEmail'
+    );
     if (exists) throw new HttpError(409, 'Email já cadastrado');
 
     const hash = await hashPassword(password);
 
-    const user = await prisma.$transaction(async (tx) => {
+    const user = await safeTx(async (tx) => {
       const u = await tx.user.create({
         data: {
           name: invite.student?.name || invite.name || 'Aluno',
@@ -1294,7 +1520,7 @@ router.post(
       });
 
       return u;
-    });
+    }, 'invites.accept.tx', { timeout: 10000 });
 
     const jwt = signToken(user);
     res.status(201).json({ token: jwt, user });
@@ -1310,18 +1536,24 @@ router.post(
     const { id } = req.params;
     const { via } = req.validated;
 
-    const invite = await prisma.invite.findUnique({ where: { id } });
+    const invite = await safeQuery(
+      () => prisma.invite.findUnique({ where: { id } }),
+      'invites.markSent.findInvite'
+    );
     if (!invite) throw new HttpError(404, 'Convite não encontrado');
     if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já aceito');
 
-    const updated = await prisma.invite.update({
-      where: { id },
-      data: {
-        status: invite.status === 'PENDING' ? 'SENT' : invite.status,
-        sentAt: invite.sentAt ?? new Date(),
-        sentVia: via,
-      },
-    });
+    const updated = await safeQuery(
+      () => prisma.invite.update({
+        where: { id },
+        data: {
+          status: invite.status === 'PENDING' ? 'SENT' : invite.status,
+          sentAt: invite.sentAt ?? new Date(),
+          sentVia: via,
+        },
+      }),
+      'invites.markSent'
+    );
     res.json(updated);
   })
 );
@@ -1332,13 +1564,19 @@ router.post(
   requireAuth, requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const invite = await prisma.invite.findUnique({ where: { id } });
+    const invite = await safeQuery(
+      () => prisma.invite.findUnique({ where: { id } }),
+      'invites.revoke.findInvite'
+    );
     if (!invite) throw new HttpError(404, 'Convite não encontrado');
     if (invite.status === 'ACCEPTED') throw new HttpError(409, 'Convite já aceito');
 
-    const updated = await prisma.invite.update({
-      where: { id }, data: { status: 'REVOKED' },
-    });
+    const updated = await safeQuery(
+      () => prisma.invite.update({
+        where: { id }, data: { status: 'REVOKED' },
+      }),
+      'invites.revoke'
+    );
     res.json(updated);
   })
 );
@@ -1346,6 +1584,8 @@ countRoute();
 
 // ============================================
 // STUDENT IMPORT
+// ============================================
+// v3.2: aceita cpf (normalizado) no import
 // ============================================
 
 router.post(
@@ -1356,24 +1596,32 @@ router.post(
     const { students } = req.validated;
     const out = { created: 0, skipped: 0, errors: [] };
 
-    await prisma.$transaction(async (tx) => {
-      for (const s of students) {
-        try {
-          const exists = await tx.student.findUnique({ where: { legacyId: s.legacyId } });
-          if (exists) { out.skipped++; continue; }
-          await tx.student.create({
-            data: {
-              legacyId: s.legacyId, name: s.name,
-              email: s.email ?? null, phone: s.phone ?? null,
-              birthDate: s.birthDate ?? null,
-            },
-          });
-          out.created++;
-        } catch (err) {
-          out.errors.push({ legacyId: s.legacyId, error: err.message });
-        }
+    await safeTx(async (tx) => {
+      const legacyIds = students.map((s) => s.legacyId);
+      const existing = await tx.student.findMany({
+        where: { legacyId: { in: legacyIds } },
+        select: { legacyId: true },
+      });
+      const skipSet = new Set(existing.map((e) => e.legacyId));
+
+      const toCreate = students.filter((s) => !skipSet.has(s.legacyId));
+      out.skipped = students.length - toCreate.length;
+
+      if (toCreate.length > 0) {
+        await tx.student.createMany({
+          data: toCreate.map((s) => ({
+            legacyId: s.legacyId,
+            name: s.name,
+            email: s.email ?? null,
+            phone: s.phone ?? null,
+            cpf: normalizeCpf(s.cpf),
+            birthDate: s.birthDate ?? null,
+          })),
+          skipDuplicates: true,
+        });
+        out.created = toCreate.length;
       }
-    }, { timeout: 30000 });
+    }, 'students.import.tx', { timeout: 10000 });
 
     res.status(201).json(out);
   })
@@ -1383,21 +1631,10 @@ countRoute();
 // ============================================
 // CRON / PING
 // ============================================
-// GET /_ping — rota ultraleve usada pelos self-pings do cron.
-// Responde rápido, sem tocar no banco (o Prisma Postgres não tem cold start).
 router.get('/_ping', asyncHandler(async (req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 }));
 countRoute();
-
-// POST /cron/ping — recebido pelo cron externo a cada 1 min.
-// Responde 202 imediatamente e dispara 5 self-pings em background,
-// espaçados de 20s, para manter a lambda quente.
-// NÃO toca no banco — o Prisma Postgres não precisa de warmup.
-const cronConfig = {
-  selfPings: Number(process.env.CRON_SELF_PINGS || 5),
-  intervalMs: Number(process.env.CRON_INTERVAL_MS || 20_000),
-};
 
 router.post('/cron/ping', asyncHandler(async (req, res) => {
   if (!CRON_SECRET) {
@@ -1409,44 +1646,16 @@ router.post('/cron/ping', asyncHandler(async (req, res) => {
     return res.status(401).json({ error: 'Não autorizado' });
   }
 
-  const cronReqId = req.id || 'cron';
-  log.info('cron: ping recebido', {
-    reqId: cronReqId,
-    selfPings: cronConfig.selfPings,
-    intervalMs: cronConfig.intervalMs,
-  });
+  log.info('cron: ping recebido', { reqId: req.id });
 
-  // Dispara em background, sem bloquear a resposta
   setImmediate(() => {
-    let sent = 0;
-    const timer = setInterval(async () => {
-      sent++;
-      const t0 = Date.now();
-      try {
-        // self-ping via HTTP interno, ou chamada direta se preferir.
-        // Aqui usamos fetch para exercitar o stack HTTP completo.
-        const base = process.env.SELF_URL
-          || `http://127.0.0.1:${process.env.PORT || 3333}`;
-        const r = await fetch(`${base}/api/v1/_ping`);
-        log.debug('cron: self-ping', {
-          reqId: cronReqId, attempt: sent, status: r.status, ms: Date.now() - t0,
-        });
-      } catch (err) {
-        log.warn('cron: self-ping falhou', {
-          reqId: cronReqId, attempt: sent, msg: err.message,
-        });
-      }
-      if (sent >= cronConfig.selfPings) {
-        clearInterval(timer);
-        log.info('cron: sequência concluída', { reqId: cronReqId, total: sent });
-      }
-    }, cronConfig.intervalMs);
+    import('./prisma.js').then(({ warmupDb }) => {
+      warmupDb(3000).catch(() => {});
+    }).catch(() => {});
   });
 
   res.status(202).json({
     accepted: true,
-    selfPings: cronConfig.selfPings,
-    intervalMs: cronConfig.intervalMs,
     ts: new Date().toISOString(),
   });
 }));

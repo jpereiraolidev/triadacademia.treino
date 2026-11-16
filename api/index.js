@@ -1,14 +1,22 @@
 // ============================================
 // api/index.js — Bootstrap do servidor
-// Triad Academia · v3.0
+// Triad Academia · v3.1
+//
+// Mudanças v3.1 (sobre v3.0):
+//   - /health retorna 503 quando isDbHealthy() é false
+//   - /health dispara log.alert na transição healthy→unhealthy
+//   - uncaughtException/unhandledRejection passam { err } (redact trata Error)
+//   - flush(3000) nos crash guards (Vercel) para email/DB saírem
+//   - shutdown() chama flush(5000) antes de disconnect()
+//   - import de flush, isDbHealthy, prismaConfig
 // ============================================
 
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 
-import { log as rootLog } from '../src/logs.js';
-import { warmupDb, disconnect } from '../src/prisma.js';
+import { log as rootLog, flush } from '../src/logs.js';
+import { warmupDb, disconnect, isDbHealthy, prismaConfig } from '../src/prisma.js';
 import { PORT } from '../src/config.js';
 import { apiLimiter } from '../src/auth.js';
 import router from '../src/routes.js';
@@ -28,9 +36,6 @@ app.disable('x-powered-by');
 // ============================================
 // HELMET
 // ============================================
-// ⬅️ MUDOU: adicionado crossOriginResourcePolicy: 'cross-origin'
-// pra permitir que o navegador aceite respostas cross-origin
-// (o front em 127.0.0.1:5500 precisa ler a resposta da API em Vercel).
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
@@ -48,10 +53,6 @@ try {
 
   app.use(cors({
     origin: corsOrigin,
-    // ⬅️ MUDOU: removido credentials: true
-    // O front usa Bearer token no header Authorization (não cookie),
-    // então credentials: true era redundante e quebrava o CORS
-    // quando origin era '*'.
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -60,13 +61,12 @@ try {
       'X-Cron-Secret',
       'X-Request-Id',
     ],
-    // ⬅️ MUDOU: cache do preflight por 24h (evita OPTIONS repetido)
     maxAge: 86400,
   }));
 
   log.info(`cors aplicado (origin=${Array.isArray(corsOrigin) ? corsOrigin.join(',') : corsOrigin})`);
 } catch (err) {
-  log.fatal(`falha ao aplicar CORS: ${err.message}`);
+  log.fatal('falha ao aplicar CORS', { err });
   throw err;
 }
 
@@ -86,15 +86,48 @@ app.use(warmupGlobal);
 // ============================================
 // HEALTH
 // ============================================
+// Estado anterior de saúde do DB, para detectar transições
+// (healthy → unhealthy → healthy) e disparar alerta só na mudança.
+let wasHealthy = true;
+
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', ts: new Date().toISOString() });
+  const dbOk = isDbHealthy();
+
+  // Transição healthy → unhealthy: alerta proativo
+  if (!dbOk && wasHealthy) {
+    log.alert('health: banco caiu (circuit breaker aberto)', { prismaConfig });
+    wasHealthy = false;
+  } else if (dbOk && !wasHealthy) {
+    log.info('health: banco recuperado');
+    wasHealthy = true;
+  }
+
+  res.status(dbOk ? 200 : 503).json({
+    status: dbOk ? 'ok' : 'degraded',
+    uptime: Math.round(process.uptime()),
+    ts: new Date().toISOString(),
+  });
 });
 
 app.get('/health/warm', noCache, async (req, res) => {
   const t0 = Date.now();
   const result = await warmupDb(5000);
   const ms = Date.now() - t0;
-  res.json({
+
+  // Se o warmup falhou, também é sinal de banco fora
+  if (!result.ok && wasHealthy) {
+    log.alert('health/warm: banco inacessível', {
+      ms,
+      error: result.error,
+      prismaConfig,
+    });
+    wasHealthy = false;
+  } else if (result.ok && !wasHealthy) {
+    log.info('health/warm: banco recuperado', { ms });
+    wasHealthy = true;
+  }
+
+  res.status(result.ok ? 200 : 503).json({
     status: result.ok ? 'ok' : 'degraded',
     warmup: { ok: result.ok, ms, error: result.error || null },
     ts: new Date().toISOString(),
@@ -116,13 +149,23 @@ app.use(errorHandler);
 // ============================================
 // CRASH GUARDS
 // ============================================
+// Passa { err } (não { msg }) para o redact incluir
+// name, message, code, status e (em dev) stack.
 process.on('uncaughtException', (err) => {
-  log.fatal('uncaughtException', { msg: err?.message });
+  log.fatal('uncaughtException', { err });
+  // Em serverless, a lambda morre logo após isso.
+  // flush(3000) dá tempo do email/DB saírem.
+  if (process.env.VERCEL) {
+    flush(3000).finally(() => process.exit(1));
+  }
 });
 
 process.on('unhandledRejection', (reason) => {
-  const msg = reason instanceof Error ? reason.message : String(reason);
-  log.fatal('unhandledRejection', { msg });
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  log.fatal('unhandledRejection', { err });
+  if (process.env.VERCEL) {
+    flush(3000).finally(() => process.exit(1));
+  }
 });
 
 // ============================================
@@ -132,7 +175,7 @@ if (!process.env.VERCEL) {
   const server = app.listen(PORT, () => {
     console.log('');
     console.log('============================================================');
-    console.log('🚀 Triad Academia API · v3.0');
+    console.log('🚀 Triad Academia API · v3.1');
     console.log(`   URL       : http://localhost:${PORT}`);
     console.log(`   Health    : http://localhost:${PORT}/health`);
     console.log(`   Health+   : http://localhost:${PORT}/health/warm`);
@@ -151,7 +194,9 @@ if (!process.env.VERCEL) {
     log.info(`${signal} recebido, encerrando...`);
 
     server.close(async () => {
-      try { await disconnect(); } catch {}
+      // Espera email/DB pendentes antes de fechar o Prisma
+      await flush(5000);
+      try { await disconnect(); } catch { /* ignore */ }
       process.exit(0);
     });
 
