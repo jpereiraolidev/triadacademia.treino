@@ -90,10 +90,20 @@ app.use(warmupGlobal);
 // (healthy → unhealthy → healthy) e disparar alerta só na mudança.
 let wasHealthy = true;
 
-app.get('/health', (req, res) => {
-  const dbOk = isDbHealthy();
+app.get('/health', async (req, res) => {
+  let dbOk = isDbHealthy();
 
-  // Transição healthy → unhealthy: alerta proativo
+  // Se o breaker está aberto, tenta um ping rápido para fechar
+  if (!dbOk) {
+    const t0 = Date.now();
+    const result = await warmupDb(3000);
+    dbOk = result.ok;
+    if (dbOk) {
+      log.info('health: banco recuperado (ping ok)', { ms: Date.now() - t0 });
+      wasHealthy = true;
+    }
+  }
+
   if (!dbOk && wasHealthy) {
     log.alert('health: banco caiu (circuit breaker aberto)', { prismaConfig });
     wasHealthy = false;
