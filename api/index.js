@@ -122,7 +122,7 @@ app.get('/health', async (req, res) => {
 // api/index.js — TESTE FATAL (temporário)
 // ⚠️  REMOVER DEPOIS DO TESTE
 // ============================================
-import { flush } from '../src/logs.js';
+
 
 // api/index.js — rota _test-fatal (CORRIGIDA v2)
 app.get('/_test-fatal', async (req, res) => {
